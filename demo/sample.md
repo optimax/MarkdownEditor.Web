@@ -32,7 +32,7 @@ function greet(name) {
 | Key | What it does |
 | --- | :--- |
 | Ctrl+B | Bold |
-| Ctrl+Alt+2 | Heading 2 |
+| Ctrl+2 | Heading 2 |
 | Tab | The next cell |
 
 ---

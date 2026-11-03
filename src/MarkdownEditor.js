@@ -77,7 +77,7 @@ const LABELS = {
     strike: 'Strikethrough (Ctrl+Shift+X)', code: 'Inline code (Ctrl+`)', quote: 'Quote (Ctrl+Alt+Q)',
     bullet: 'Bullet list (Ctrl+Shift+8)', number: 'Numbered list (Ctrl+Shift+7)', task: 'Task list (Ctrl+Shift+9)',
     codeblock: 'Code block (Ctrl+Alt+C)', link: 'Link (Ctrl+K)', image: 'Picture', table: 'Table',
-    rule: 'Horizontal line (Ctrl+Alt+L)', marks: 'Paragraph marks', block: 'Paragraph type (Ctrl+Alt+0 to 6)',
+    rule: 'Horizontal line (Ctrl+Alt+L)', marks: 'Paragraph marks', block: 'Paragraph or heading (Ctrl+0 to Ctrl+6)',
 };
 
 const BLOCK_OPTIONS = [['paragraph', 'Paragraph'], ['h1', 'Heading 1'], ['h2', 'Heading 2'], ['h3', 'Heading 3'],
@@ -265,6 +265,16 @@ export class MarkdownEditor extends EventTarget {
         if (!this.readOnly) this.controller.setBlockType(type);
     }
 
+    /** Headings of `level` (1 to 6), or paragraphs (0), of the paragraphs the selection touches: not a toggle. */
+    setHeadingLevel(level) {
+        if (!this.readOnly) this.controller.setHeadingLevel(level);
+    }
+
+    /** One heading level deeper (`by` 1: a paragraph becomes Heading 1) or shallower (-1). */
+    stepHeadingLevel(by) {
+        if (!this.readOnly) this.controller.stepHeadingLevel(by);
+    }
+
     get blockType() {
         return this.controller.blockType;
     }
@@ -313,9 +323,8 @@ export class MarkdownEditor extends EventTarget {
     /** A command by name, as the toolbar runs it ('strong', 'h2', 'bullet', 'undo', 'table', 'link'...). */
     execute(name) {
         if (['strong', 'em', 'underline', 'strike', 'code', 'sub', 'sup'].includes(name)) return this.toggleInline(name);
-        if (/^h[1-6]$/.test(name) || ['paragraph', 'quote', 'bullet', 'number', 'task'].includes(name)) {
-            return this.setBlockType(name);
-        }
+        if (/^h[1-6]$/.test(name)) return this.setHeadingLevel(+name[1]);
+        if (['paragraph', 'quote', 'bullet', 'number', 'task'].includes(name)) return this.setBlockType(name);
         switch (name) {
             case 'undo': return this.undo();
             case 'redo': return this.redo();
@@ -334,8 +343,9 @@ export class MarkdownEditor extends EventTarget {
 
     // ---- Keys, toolbar, links ---------------------------------------------------------------------------------------
 
-    // The keys (MaxPad's where a browser leaves them to the page; Ctrl+Alt+digits for the paragraph types, as TinyPad's,
-    // since Ctrl+1 to Ctrl+6 switch a browser's tabs).
+    // The keys: MaxPad's (a browser gives a page Ctrl+1 to Ctrl+6 before it switches tabs with them, and switches none
+    // when the page takes them), with Ctrl+Alt+0 to 6 as well, as TinyPad's, for a browser that keeps Ctrl+digits;
+    // and other keys where a browser keeps MaxPad's (Ctrl+Shift+T, Q, C, [ and ]).
     _bindKeys() {
         const keys = this.view.keymap;
         const run = (fn) => () => {
@@ -351,23 +361,38 @@ export class MarkdownEditor extends EventTarget {
         keys.set('Ctrl+Shift+X', run(() => this.toggleInline('strike')));
         keys.set('Ctrl+`', run(() => this.toggleInline('code')));
         keys.set('Ctrl+K', run(() => this.promptLink()));
-        keys.set('Ctrl+Alt+0', run(() => this.setBlockType('paragraph')));
-        for (let level = 1; level <= 6; level++) keys.set(`Ctrl+Alt+${level}`, run(() => this.setBlockType('h' + level)));
+        for (let level = 0; level <= 6; level++) {
+            keys.set(`Ctrl+${level}`, run(() => this.setHeadingLevel(level)));
+            keys.set(`Ctrl+Alt+${level}`, run(() => this.setHeadingLevel(level)));
+        }
         keys.set('Ctrl+Shift+7', run(() => this.setBlockType('number')));
         keys.set('Ctrl+Shift+8', run(() => this.setBlockType('bullet')));
         keys.set('Ctrl+Shift+9', run(() => this.setBlockType('task')));
         keys.set('Ctrl+Alt+Q', run(() => this.setBlockType('quote')));
         keys.set('Ctrl+Alt+C', run(() => this.setBlockType('code')));
         keys.set('Ctrl+Alt+L', run(() => this.insertRule()));
-        this.view.keymap.set('Ctrl+=', run(() => (this.zoom = this.zoom * 1.1)));
-        this.view.keymap.set('Ctrl+-', run(() => (this.zoom = this.zoom / 1.1)));
-        this.view.keymap.set('Ctrl+0', run(() => (this.zoom = 1)));
-        // (the backquote key reports itself as ` on most layouts, Dead on some)
+        // (the zoom has no keys, as MaxPad's: Ctrl and the mouse wheel zoom, about 2% a notch)
+        this.view.scroller.addEventListener('wheel', (event) => {
+            if (!event.ctrlKey) return;
+            event.preventDefault();
+            const notches = event.deltaY / (event.deltaMode === 1 ? 3 : event.deltaMode === 2 ? 0.3 : 100);
+            this.zoom = this.zoom * Math.pow(0.98, notches);
+        }, { passive: false });
+        // (keys by where they are, whatever a layout types with them: the backquote, ` on most layouts and Dead on some;
+        // and the = and - keys of Ctrl+= and Ctrl+-, MaxPad's heading level one deeper or shallower, with the number pad's)
+        const byCode = {
+            Backquote: () => this.toggleInline('code'),
+            Equal: () => this.stepHeadingLevel(1), NumpadAdd: () => this.stepHeadingLevel(1),
+            Minus: () => this.stepHeadingLevel(-1), NumpadSubtract: () => this.stepHeadingLevel(-1),
+        };
+        // (a key with no code -- a virtual keyboard's, a remote desktop's -- by what it types)
+        const codeOf = { '`': 'Backquote', '=': 'Equal', '+': 'NumpadAdd', '-': 'Minus' };
         this.view.addEventListener('key', (event) => {
             const { event: key } = event.detail;
-            if ((key.ctrlKey || key.metaKey) && !key.altKey && key.code === 'Backquote') {
+            const command = byCode[key.code || codeOf[key.key]];
+            if (command && (key.ctrlKey || key.metaKey) && !key.altKey) {
                 event.preventDefault();
-                this.toggleInline('code');
+                command();
             }
         });
     }
@@ -394,7 +419,7 @@ export class MarkdownEditor extends EventTarget {
                 select.setAttribute('aria-label', 'Paragraph type');
                 for (const [value, label] of BLOCK_OPTIONS) select.append(new Option(label, value));
                 select.addEventListener('change', () => {
-                    this.setBlockType(select.value);
+                    this.setHeadingLevel(select.value === 'paragraph' ? 0 : +select.value[1]);
                     this.focus();
                 });
                 this.blockSelect = select;

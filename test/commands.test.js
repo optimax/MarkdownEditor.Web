@@ -4,7 +4,7 @@ import { test, equal } from './harness.js';
 import { MarkdownState } from '../src/markdown/state.js';
 import * as commands from '../src/markdown/commands.js';
 import { toggleInline, isInline } from '../src/markdown/formatting.js';
-import { setBlockType, insertTable } from '../src/markdown/blocks.js';
+import { setBlockType, setHeadingLevel, stepHeadingLevel, insertTable } from '../src/markdown/blocks.js';
 
 function parse(marked) {
     let source = '', anchor = null, caret = null;
@@ -146,4 +146,20 @@ test('paragraph types', () => {
     check((state, selection) => setBlockType(state, selection, 'paragraph'), '- a\n- b¦', '- a\n\nb¦');
     check((state, selection) => setBlockType(state, selection, 'code'), 'a¦', '```¦\na\n```');
     check(insertTable, 'a¦', 'a\n\n| «Column 1» | Column 2 | Column 3 |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |');
+});
+
+test('heading levels, as MaxPad\'s Ctrl+0 to Ctrl+6, Ctrl+= and Ctrl+-', () => {
+    const level = (n) => (state, selection) => setHeadingLevel(state, selection, n);
+    const step = (by) => (state, selection) => stepHeadingLevel(state, selection, by);
+    check(level(2), 'ab¦c', '## ab¦c');
+    check(level(2), '## ab¦c', null); // (not a toggle: a Heading 2 stays one)
+    check(level(1), '### ab¦c', '# ab¦c');
+    check(level(0), '### ab¦c', 'ab¦c');
+    check(level(1), '«a\n\n## b»', '# «a\n\n# b»');
+    check(step(1), 'ab¦c', '# ab¦c');
+    check(step(1), '# ab¦c', '## ab¦c');
+    check(step(1), '###### a¦', null);
+    check(step(-1), '# ab¦c', 'ab¦c');
+    check(step(-1), '## ab¦c', '# ab¦c');
+    check(step(-1), 'ab¦c', null);
 });

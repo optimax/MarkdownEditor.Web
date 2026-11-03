@@ -104,6 +104,25 @@ test('the caret moved with the keys is where the next edit goes', async () => {
     checkView(editor);
 });
 
+test('Ctrl and a number makes a heading, Ctrl+0 a paragraph; Ctrl+= and Ctrl+- step the level', async () => {
+    const editor = makeEditor('Title\n\nText');
+    editor.select(2);
+    await press(editor, '2', { ctrlKey: true, code: 'Digit2' });
+    equal(editor.value, '## Title\n\nText');
+    await press(editor, '0', { ctrlKey: true, code: 'Digit0' });
+    equal(editor.value, 'Title\n\nText');
+    await press(editor, '=', { ctrlKey: true, code: 'Equal' });
+    await press(editor, '=', { ctrlKey: true, code: 'Equal' });
+    equal(editor.value, '## Title\n\nText');
+    await press(editor, '-', { ctrlKey: true, code: 'Minus' });
+    equal(editor.value, '# Title\n\nText');
+    await press(editor, '3', { ctrlKey: true, altKey: true, code: 'Digit3' });
+    equal(editor.value, '### Title\n\nText');
+    equal(editor.selection.caret, 6, 'the caret stays in the text');
+    equal(editor.zoom, 1, 'the keys no longer zoom');
+    checkView(editor);
+});
+
 test('CRLF documents keep their line endings', async () => {
     const editor = makeEditor('a\r\n\r\nb');
     editor.select(1);

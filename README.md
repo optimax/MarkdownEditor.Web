@@ -124,16 +124,17 @@ A theme object overrides any of `LIGHT_THEME`'s values: `fontFamily`, `fontSize`
 | Ctrl+B, Ctrl+I, Ctrl+U | Bold, italic, underline |
 | Ctrl+\`, Ctrl+Shift+X | Inline code, strikethrough |
 | Ctrl+K | A link |
-| Ctrl+Alt+0 to Ctrl+Alt+6 | Paragraph, Heading 1 to 6 |
+| Ctrl+1 to Ctrl+6, Ctrl+0 | Heading 1 to 6, paragraph (Ctrl+Alt+1 to 6 and 0 too) |
+| Ctrl+=, Ctrl+- | One heading level deeper (a paragraph becomes Heading 1), shallower |
 | Ctrl+Shift+7, 8, 9 | Numbered list, bullet list, task list |
 | Ctrl+Alt+Q, C, L | Quote, code block, horizontal line |
 | Ctrl+Z, Ctrl+Y | Undo, redo |
-| Ctrl+= and Ctrl+-, Ctrl+0 | Zoom in and out, actual size |
+| Ctrl and the mouse wheel | Zoom (about 2% a notch) |
 
-The keys are MaxPad's where a browser leaves them to the page. MaxPad's Ctrl+1 to Ctrl+6
-switch a browser's tabs, and Ctrl+Shift+T, Q, C, \[ and \] are the browser's too, so the
-paragraph types are on Ctrl+Alt (as in the TinyPad tutorial) and the lists on Google Docs'
-keys.
+The keys are MaxPad's. A browser gives the page Ctrl+1 to Ctrl+6 before it switches tabs with
+them, and switches none when the page takes them; Ctrl+Alt+1 to 6 are there as well for a
+browser that keeps them. MaxPad's Ctrl+Shift+T, Q, C, \[ and \] are the browser's own, so
+the lists are on Google Docs' keys and the quote, the code block and the line on Ctrl+Alt.
 
 ## How it is built
 

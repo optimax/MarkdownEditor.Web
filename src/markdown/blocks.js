@@ -48,12 +48,46 @@ export function setBlockType(state, selection, type) {
     if (!paragraphs.length) return null;
     const all = paragraphs.every((p) => blockTypeAt(state, p.start) === type);
     const target = all ? 'paragraph' : type;
-    const unquote = all && type === 'quote';
+    return rewriteAll(state, selection, paragraphs, () => target, all && type === 'quote');
+}
+
+// The heading level of a paragraph of text: 1 to 6 for a heading, 0 for any other.
+const levelOf = (p) => (p.kind === 'heading' ? p.block.level : 0);
+
+const typeOfLevel = (level) => (level === 0 ? 'paragraph' : 'h' + level);
+
+/**
+ * MaxPad's Ctrl+1 to Ctrl+6, and Ctrl+0: the paragraphs the selection touches (the caret's) made headings of `level`, or
+ * paragraphs for 0. Not a toggle: a paragraph that is that already is left as it is.
+ */
+export function setHeadingLevel(state, selection, level) {
+    if (!(level >= 0 && level <= 6)) return null;
+    const paragraphs = touchedText(state, selection).filter((p) => levelOf(p) !== level);
+    return rewriteAll(state, selection, paragraphs, () => typeOfLevel(level), false);
+}
+
+/**
+ * MaxPad's Ctrl+= (`by` 1: one level deeper, a paragraph becoming Heading 1) and Ctrl+- (`by` -1: one level shallower,
+ * Heading 1 becoming a paragraph), for each paragraph the selection touches; one that can go no further stays.
+ */
+export function stepHeadingLevel(state, selection, by) {
+    const paragraphs = touchedText(state, selection).filter((p) => levelOf(p) + by >= 0 && levelOf(p) + by <= 6);
+    return rewriteAll(state, selection, paragraphs, (p) => typeOfLevel(levelOf(p) + by), false);
+}
+
+function touchedText(state, selection) {
+    const [a, b] = order(selection);
+    return state.paragraphs.slice(state.paragraphIndexAt(a), state.paragraphIndexAt(b) + 1).filter(textParagraph);
+}
+
+// The paragraphs written again, each as `targetOf` says, in one edit; the caret and the selection keep their places in
+// their paragraphs' text.
+function rewriteAll(state, selection, paragraphs, targetOf, unquote) {
     let source = state.source;
     const changes = [];
     let number = 1;
     for (const p of paragraphs) {
-        const change = rewrite(state, p, target, number, unquote);
+        const change = rewrite(state, p, targetOf(p), number, unquote);
         if (change) {
             changes.push(change);
             number++;

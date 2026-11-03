@@ -133,6 +133,16 @@ export class MarkdownController extends EventTarget {
         this._run(() => blocks.setBlockType(this.state, this.selection, type), 'block');
     }
 
+    /** Makes the paragraphs of the selection headings of `level` (1 to 6), or paragraphs (0); not a toggle. */
+    setHeadingLevel(level) {
+        this._run(() => blocks.setHeadingLevel(this.state, this.selection, level), 'block');
+    }
+
+    /** One heading level deeper (`by` 1: a paragraph becomes Heading 1) or shallower (-1), for each paragraph. */
+    stepHeadingLevel(by) {
+        this._run(() => blocks.stepHeadingLevel(this.state, this.selection, by), 'block');
+    }
+
     /** The type of the paragraph at the caret. */
     get blockType() {
         this._syncFromView();

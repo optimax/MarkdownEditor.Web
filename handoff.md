@@ -35,8 +35,11 @@ Done, on branch `claude/web-markdown-editor` (not merged into `main`):
   paragraphs whose projection changed (a table is replaced whole).
 - An editor without the focus shows no syntax (MaxPad shows it at the caret always; a page
   may have several editors). `revealUnfocused: true` keeps MaxPad's way.
-- Keys: MaxPad's where the browser leaves them; paragraph types on Ctrl+Alt+0 to 6 (as
-  TinyPad), lists on Ctrl+Shift+7, 8, 9 (as Google Docs). See README.md, "Keys".
+- Keys: MaxPad's (2026-11-03, the user: "Ctrl+Number keys don't work"): Ctrl+1 to 6
+  headings and Ctrl+0 a paragraph, set and never toggled; Ctrl+= and Ctrl+- the level one
+  deeper or shallower; zoom on Ctrl and the mouse wheel only. Ctrl+Alt+0 to 6 as well; the
+  lists on Ctrl+Shift+7, 8, 9 (as Google Docs), since the browser keeps MaxPad's
+  Ctrl+Shift+T, Q, C, [ and ]. See README.md, "Keys".
 - The file tools turn ` ` and the like into the characters themselves: invisible
   characters are written with `String.fromCharCode` or a `\x5C`-escaped edit, never typed.
 
