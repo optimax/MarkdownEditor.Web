@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MarkdownEditor.Web tests</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 16px; background: #fff; color: #222; }
+  pre { background: #fdf0f0; padding: 8px; white-space: pre-wrap; }
+  #stage { width: 600px; height: 300px; border: 1px solid #ccc; margin-top: 16px; }
+</style>
+</head>
+<body>
+<h1>MarkdownEditor.Web tests</h1>
+<div id="output"></div>
+<div id="stage"></div>
+<script type="module">
+  import { run } from './harness.js';
+  const suites = new URLSearchParams(location.search).get('suites');
+  const all = ['parser', 'projection', 'commands', 'view', 'editor'];
+  for (const name of suites ? suites.split(',') : all) {
+    try {
+      await import(`./${name}.test.js`);
+    } catch (error) {
+      if (!String(error).includes('Failed to fetch')) throw error;
+    }
+  }
+  await run(document.getElementById('output'));
+</script>
+</body>
+</html>

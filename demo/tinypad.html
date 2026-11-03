@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TinyPad</title>
+<style>
+  :root { --bg: #f4f5f7; --panel: #ffffff; --ink: #1f2328; --line: #d0d7de; --muted: #57606a; }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; font: 14px system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+  header { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 16px; background: var(--panel);
+    border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 15px; margin: 0 12px 0 0; }
+  button { font: inherit; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff;
+    color: var(--ink); cursor: pointer; }
+  button:disabled { color: #a0a7b0; cursor: default; }
+  #editor { flex: 1; margin: 16px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  footer { padding: 4px 16px 10px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Untitled - TinyPad</h1>
+  <button id="undo" title="Ctrl+Z">Undo</button>
+  <button id="redo" title="Ctrl+Y">Redo</button>
+  <button data-format="b" title="Ctrl+B"><b>B</b></button>
+  <button data-format="i" title="Ctrl+I"><i>I</i></button>
+  <button data-format="u" title="Ctrl+U"><u>U</u></button>
+  <button data-style="normal" title="Ctrl+Shift+N">Normal</button>
+  <button data-style="h1" title="Ctrl+Alt+1">Heading 1</button>
+  <button data-style="h2" title="Ctrl+Alt+2">Heading 2</button>
+  <button data-style="h3" title="Ctrl+Alt+3">Heading 3</button>
+  <button id="save" title="Ctrl+S">Save .tiny</button>
+</header>
+<div id="editor"></div>
+<footer id="status"></footer>
+<script type="module">
+  // TinyPad: the small editor of the VirtualTextView tutorial (MarkdownTools, Documents/virtual-text-view-control-
+  // tutorial.md), on the web control. The styles, the undo history and the commands are the page's; the control does
+  // typing, the caret, the selection, the mouse, Enter, Shift+Enter, Backspace, Delete and the clipboard.
+  import { VirtualTextView, pos } from '../src/index.js';
+
+  // ---- The styles: "h1" to "h3" are headings, anything else Normal; a character style is some of the letters b, i, u
+  const body = { name: 'Normal', fontFamily: 'Segoe UI, system-ui, sans-serif', fontSize: 15, margin: [0, 0, 6, 0] };
+  const heading = (name, size) => ({ ...body, name, fontSize: size, bold: true, margin: [12, 0, 6, 0], nextStyleId: 'normal' });
+  const styles = {
+    getParagraphStyle: (id) =>
+      ({ h1: heading('Heading 1', 28), h2: heading('Heading 2', 22), h3: heading('Heading 3', 18) })[id] ?? body,
+    getCharacterStyle: (id) => ({
+      bold: id.includes('b') ? true : undefined, italic: id.includes('i') ? true : undefined,
+      underline: id.includes('u') ? true : undefined,
+    }),
+  };
+  const withLetter = (id, letter, on) => {
+    const letters = [...'biu'].filter((each) => (each === letter ? on : (id ?? '').includes(each))).join('');
+    return letters || null;
+  };
+
+  // ---- Undo and redo: the view keeps no history; it tells its recorder of each edit, and replays one given back
+  const undo = [], redo = [];
+  const history = { recordEdit(edit) { undo.push(edit); redo.length = 0; refresh(); } };
+
+  const view = new VirtualTextView(document.getElementById('editor'), {
+    styleProvider: styles, editRecorder: history,
+    paragraphs: [
+      { styleId: 'h1', runs: [{ text: 'Hello, world.' }] },
+      { styleId: 'normal', runs: [{ text: 'Type here. ' }, { text: 'Bold', styleId: 'b' }, { text: ' and ' },
+        { text: 'underlined', styleId: 'u' }, { text: ' text, a paragraph long enough to wrap when the window is narrow.' }] },
+    ],
+  });
+  window.view = view;
+  view.setCaret(pos(1, 0));
+  view.focus();
+  let savedVersion = view.version;
+
+  const doUndo = () => { const edit = undo.pop(); if (edit) { view.applyEdit(edit.inverse()); redo.push(edit); refresh(); } };
+  const doRedo = () => { const edit = redo.pop(); if (edit) { view.applyEdit(edit); undo.push(edit); refresh(); } };
+
+  // Bold, italic or underline: on for the selection, or for what is typed next, unless the text there has it already.
+  function toggle(letter) {
+    if (!view.caret) return;
+    const selection = view.selection;
+    if (selection) {
+      const on = !(view.getCharacterStyleIdAt(selection.end) ?? '').includes(letter);
+      view.mapCharacterStyles(selection.start, selection.end, (id) => withLetter(id, letter, on));
+      return;
+    }
+    let now = view.getCharacterStyleIdAt(view.caret);
+    if (view.typingFormat) now = view.typingFormat({ text: '', styleId: now }).styleId;
+    const next = withLetter(now, letter, !(now ?? '').includes(letter));
+    view.setTypingFormat((run) => ({ ...run, styleId: next ?? undefined }));
+  }
+
+  function setStyle(id) {
+    if (!view.caret) return;
+    const { start, end } = view.selection ?? { start: view.caret, end: view.caret };
+    view.setParagraphStyles(start.paragraph, end.paragraph, id);
+  }
+
+  function save() {
+    const paragraphs = Array.from({ length: view.paragraphCount }, (_, i) => view.getParagraph(i))
+      .map((p) => ({ Style: p.styleId ?? null, Runs: p.runs.map((run) => ({ Text: run.text, Style: run.styleId ?? null })) }));
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([JSON.stringify(paragraphs, null, 2)], { type: 'application/json' }));
+    link.download = 'Untitled.tiny';
+    link.click();
+    savedVersion = view.version;
+    refresh();
+  }
+
+  view.keymap.set('Ctrl+Z', doUndo);
+  view.keymap.set('Ctrl+Y', doRedo);
+  view.keymap.set('Ctrl+Shift+Z', doRedo);
+  view.keymap.set('Ctrl+B', () => toggle('b'));
+  view.keymap.set('Ctrl+I', () => toggle('i'));
+  view.keymap.set('Ctrl+U', () => toggle('u'));
+  view.keymap.set('Ctrl+Shift+N', () => setStyle('normal'));
+  view.keymap.set('Ctrl+Alt+1', () => setStyle('h1'));
+  view.keymap.set('Ctrl+Alt+2', () => setStyle('h2'));
+  view.keymap.set('Ctrl+Alt+3', () => setStyle('h3'));
+  view.keymap.set('Ctrl+S', save);
+
+  const keepFocus = (fn) => (event) => { event.preventDefault(); fn(); view.focus(); };
+  document.getElementById('undo').addEventListener('mousedown', keepFocus(doUndo));
+  document.getElementById('redo').addEventListener('mousedown', keepFocus(doRedo));
+  document.getElementById('save').addEventListener('mousedown', keepFocus(save));
+  for (const button of document.querySelectorAll('[data-format]')) {
+    button.addEventListener('mousedown', keepFocus(() => toggle(button.dataset.format)));
+  }
+  for (const button of document.querySelectorAll('[data-style]')) {
+    button.addEventListener('mousedown', keepFocus(() => setStyle(button.dataset.style)));
+  }
+
+  function refresh() {
+    document.getElementById('undo').disabled = undo.length === 0;
+    document.getElementById('redo').disabled = redo.length === 0;
+    document.getElementById('title').textContent = `Untitled${view.version !== savedVersion ? ' *' : ''} - TinyPad`;
+    const caret = view.caret;
+    const selected = view.selection ? ` (${view.selectedText.length} selected)` : '';
+    document.getElementById('status').textContent = caret
+      ? `Paragraph ${caret.paragraph + 1}, character ${caret.index + 1}${selected}`
+      : '';
+  }
+  view.addEventListener('documentchange', refresh);
+  view.addEventListener('selectionchange', refresh);
+  refresh();
+</script>
+</body>
+</html>

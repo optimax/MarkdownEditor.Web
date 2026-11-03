@@ -1,0 +1,109 @@
+// <markdown-editor>: the editor as an element of the page, for pages that write HTML rather than script.
+//
+//   <markdown-editor name="body" theme="dark" style="height: 400px">
+//     <script type="text/markdown">
+//       # Hello
+//
+//       Some **bold** text.
+//     </script>
+//   </markdown-editor>
+//
+// Attributes: `src` (a Markdown file to load), `theme` ("light" or "dark"), `toolbar` ("false" for none), `readonly`,
+// `name` (the field's name in a form: the element is a form field whose value is the Markdown), `image-base`.
+// Properties: `value`, `editor` (the MarkdownEditor). Events: 'change' (and 'input', for forms), 'linkclick'.
+
+import { MarkdownEditor } from './MarkdownEditor.js';
+
+// The Markdown written inside the element, with the indentation its lines share taken off.
+function initialMarkdown(element) {
+    const source = element.querySelector('script[type="text/markdown"], template');
+    let text = source ? (source instanceof HTMLTemplateElement ? source.innerHTML : source.textContent) : element.textContent;
+    text = text.replace(/^\s*\n/, '').replace(/\n\s*$/, '');
+    const indents = text.split('\n').filter((line) => line.trim()).map((line) => /^[ \t]*/.exec(line)[0].length);
+    const common = indents.length ? Math.min(...indents) : 0;
+    if (!common) return text;
+    return text.split('\n').map((line) => line.slice(Math.min(common, /^[ \t]*/.exec(line)[0].length))).join('\n');
+}
+
+export class MarkdownEditorElement extends HTMLElement {
+    static formAssociated = true;
+    static observedAttributes = ['readonly', 'theme', 'src', 'image-base'];
+
+    constructor() {
+        super();
+        this._internals = this.attachInternals?.() ?? null;
+    }
+
+    connectedCallback() {
+        if (this.editor) return;
+        if (!this.style.display) this.style.display = 'block';
+        const markdown = this.hasAttribute('value') ? this.getAttribute('value') : initialMarkdown(this);
+        this.replaceChildren();
+        this.editor = new MarkdownEditor(this, {
+            markdown,
+            theme: this.getAttribute('theme') ?? 'light',
+            toolbar: this.getAttribute('toolbar') !== 'false',
+            readOnly: this.hasAttribute('readonly'),
+            imageBase: this.getAttribute('image-base') ?? undefined,
+        });
+        this.editor.addEventListener('change', () => {
+            this._internals?.setFormValue(this.editor.value);
+            this.dispatchEvent(new Event('input', { bubbles: true }));
+            this.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        this.editor.addEventListener('linkclick', (event) => {
+            const relay = new CustomEvent('linkclick', { bubbles: true, cancelable: true, detail: event.detail });
+            if (!this.dispatchEvent(relay)) event.preventDefault();
+        });
+        this._internals?.setFormValue(this.editor.value);
+        if (this.hasAttribute('src')) this._load(this.getAttribute('src'));
+    }
+
+    attributeChangedCallback(name, _old, value) {
+        if (!this.editor) return;
+        if (name === 'readonly') this.editor.readOnly = value !== null;
+        else if (name === 'theme') this.editor.theme = value ?? 'light';
+        else if (name === 'src' && value) this._load(value);
+        else if (name === 'image-base') this.editor.imageBase = value;
+    }
+
+    async _load(url) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`markdown-editor: could not load ${url} (${response.status})`);
+        if (!this.hasAttribute('image-base')) this.editor.imageBase = new URL(url, location.href).href;
+        this.value = await response.text();
+    }
+
+    get value() {
+        return this.editor ? this.editor.value : '';
+    }
+
+    set value(markdown) {
+        if (!this.editor) {
+            this.setAttribute('value', markdown);
+            return;
+        }
+        this.editor.value = markdown;
+        this._internals?.setFormValue(this.editor.value);
+    }
+
+    get name() {
+        return this.getAttribute('name');
+    }
+
+    get form() {
+        return this._internals?.form ?? null;
+    }
+
+    focus() {
+        this.editor?.focus();
+    }
+
+    formResetCallback() {
+        this.value = '';
+    }
+}
+
+if (typeof customElements !== 'undefined' && !customElements.get('markdown-editor')) {
+    customElements.define('markdown-editor', MarkdownEditorElement);
+}

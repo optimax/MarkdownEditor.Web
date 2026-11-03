@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Markdown Editor element</title>
+<script type="module" src="../src/index.js"></script>
+<style>
+  body { font: 15px system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 860px; margin: 24px auto; padding: 0 16px;
+    background: #fafbfc; color: #1f2328; }
+  label { display: block; font-weight: 600; margin: 16px 0 6px; }
+  input[type=text] { width: 100%; box-sizing: border-box; font: inherit; padding: 6px 8px; border: 1px solid #d0d7de;
+    border-radius: 6px; }
+  button { margin-top: 12px; font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid #1f6feb;
+    background: #1f6feb; color: #fff; cursor: pointer; }
+  pre { background: #f0f2f5; padding: 10px; border-radius: 6px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>The editor as an element</h1>
+<p>A form with a <code>&lt;markdown-editor name="body"&gt;</code> field: it is submitted as Markdown, like a
+  <code>&lt;textarea&gt;</code>.</p>
+<form id="form">
+  <label for="title">Title</label>
+  <input type="text" id="title" name="title" value="Release notes">
+  <label>Body</label>
+  <markdown-editor name="body" style="height: 320px">
+    <script type="text/markdown">
+      ## What's new
+
+      - **Faster** loading
+      - [ ] Write the *documentation*
+
+      > Edit this text as you would in a word processor.
+    </script>
+  </markdown-editor>
+  <button type="submit">Submit</button>
+</form>
+<h2>Submitted</h2>
+<pre id="submitted">(nothing yet)</pre>
+<script type="module">
+  document.getElementById('form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const data = new FormData(event.target);
+    document.getElementById('submitted').textContent = JSON.stringify(Object.fromEntries(data), null, 2);
+  });
+</script>
+</body>
+</html>

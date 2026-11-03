@@ -1,0 +1,21 @@
+{
+  "name": "markdown-editor-web",
+  "version": "0.1.0",
+  "description": "A WYSIWYG Markdown editor for web pages, as a plain JavaScript component.",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./element": "./src/element.js",
+    "./view": "./src/view/VirtualTextView.js"
+  },
+  "files": [
+    "src"
+  ],
+  "sideEffects": [
+    "./src/index.js",
+    "./src/element.js"
+  ]
+}

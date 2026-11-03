@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Markdown Editor</title>
+<style>
+  :root { --bg: #eef0f3; --panel: #ffffff; --ink: #1f2328; --muted: #57606a; --line: #d0d7de; }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; font: 14px system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--ink); }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; }
+  header h1 { font-size: 16px; margin: 0 12px 0 0; }
+  header label { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+  header button { font: inherit; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff;
+    cursor: pointer; }
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr; gap: 12px; padding: 0 16px 8px; }
+  main.with-source { grid-template-columns: 3fr 2fr; }
+  #editor { min-height: 0; }
+  #source { display: none; margin: 0; min-height: 0; overflow: auto; padding: 12px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--panel); font: 13px/1.45 Consolas, "Cascadia Mono", monospace; white-space: pre-wrap; }
+  main.with-source #source { display: block; }
+  footer { padding: 0 16px 10px; color: var(--muted); font-size: 12px; }
+  @media (max-width: 700px) { main.with-source { grid-template-columns: 1fr; grid-template-rows: 3fr 2fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Markdown Editor</h1>
+  <label><input type="checkbox" id="show-source"> Show the Markdown</label>
+  <label><input type="checkbox" id="dark"> Dark</label>
+  <label><input type="checkbox" id="readonly"> Read-only</label>
+  <button id="download">Download .md</button>
+</header>
+<main id="main">
+  <div id="editor"></div>
+  <pre id="source"></pre>
+</main>
+<footer id="status"></footer>
+<script type="module">
+  import { MarkdownEditor } from '../src/index.js';
+
+  const sample = await fetch('sample.md').then((response) => response.text());
+  const editor = new MarkdownEditor('#editor', { markdown: sample, imageBase: new URL('./', location.href).href });
+  window.editor = editor;
+  editor.focus();
+
+  const source = document.getElementById('source');
+  const status = document.getElementById('status');
+  let savedVersion = editor.version;
+  const refresh = () => {
+    source.textContent = editor.value;
+    const words = editor.value.split(/\s+/).filter(Boolean).length;
+    status.textContent = `${editor.blockType} · ${words} words${editor.version !== savedVersion ? ' · edited' : ''}`;
+  };
+  editor.addEventListener('change', refresh);
+  editor.addEventListener('selectionchange', refresh);
+  refresh();
+
+  document.getElementById('show-source').addEventListener('change', (event) => {
+    document.getElementById('main').classList.toggle('with-source', event.target.checked);
+  });
+  document.getElementById('dark').addEventListener('change', (event) => {
+    editor.theme = event.target.checked ? 'dark' : 'light';
+    document.body.style.setProperty('--bg', event.target.checked ? '#151618' : '#eef0f3');
+  });
+  document.getElementById('readonly').addEventListener('change', (event) => (editor.readOnly = event.target.checked));
+  document.getElementById('download').addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([editor.value], { type: 'text/markdown' }));
+    link.download = 'document.md';
+    link.click();
+    savedVersion = editor.version;
+    refresh();
+  });
+</script>
+</body>
+</html>
