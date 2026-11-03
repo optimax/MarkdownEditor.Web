@@ -30,9 +30,8 @@ On `main` (pushed to GitHub, optimax/MarkdownEditor.Web):
 - `demo/` (the editor, the element in a form, TinyPad), `test/` (a browser test runner and
   its tests, one of them random commands with undo and redo checked), `tools/serve.ps1`.
 
-On branch `claude/implementation-document` (not merged yet): `documents/implementation.md`,
-and a fix it showed: what is typed after an undo or a redo is a step of its own (it could
-join the step before the one undone).
+Also on `main`: `documents/implementation.md`, and the fix writing it showed: what is typed
+after an undo or a redo is a step of its own (it could join the step before the one undone).
 
 ## Design decisions
 
