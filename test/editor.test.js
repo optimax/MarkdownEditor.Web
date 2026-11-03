@@ -91,6 +91,17 @@ test('a word typed is one undo step', async () => {
     equal(editor.value, '');
 });
 
+test('what is typed after an undo is a step of its own', async () => {
+    const editor = makeEditor('');
+    await type(editor, 'abc');
+    await press(editor, 'Backspace');
+    editor.undo();
+    equal(editor.value, 'abc');
+    await type(editor, 'd');
+    editor.undo();
+    equal(editor.value, 'abc', 'the d alone was undone, not the word it was typed after');
+});
+
 test('the caret moved with the keys is where the next edit goes', async () => {
     const editor = makeEditor('abc\n\ndef');
     editor.select(0);

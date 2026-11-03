@@ -65,12 +65,13 @@ export class EditHistory {
         return false;
     }
 
-    /** The step to undo (moved to redo), or null. */
+    /** The step to undo (moved to redo), or null. What is typed after it is a step of its own. */
     undo() {
         const step = this.undoSteps.pop();
         if (!step) return null;
         step.sealed = true;
         this.redoSteps.push(step);
+        this.seal();
         return step;
     }
 
@@ -79,6 +80,7 @@ export class EditHistory {
         const step = this.redoSteps.pop();
         if (!step) return null;
         this.undoSteps.push(step);
+        this.seal();
         return step;
     }
 }

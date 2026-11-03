@@ -138,7 +138,8 @@ the lists are on Google Docs' keys and the quote, the code block and the line on
 
 ## How it is built
 
-The layers are MaxPad's, one module each:
+[`documents/implementation.md`](documents/implementation.md) describes how it works, module
+by module. In short, the layers are MaxPad's, one module each:
 
 | Here | In MarkdownTools | What it does |
 | --- | --- | --- |
