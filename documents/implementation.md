@@ -931,8 +931,9 @@ code font, on a light background; quotes in a quiet color.
 - **Where the document goes** (2026-11-03, TO-DO "Editor Document Alignment"): the page, the
   text's column, is `mde-content-page` (the document style's `pageClassName`), and its width
   and place are the stylesheet's: `max-width: calc(var(--mde-document-width) +
-  var(--vtv-page-inset))` (860 px at 100%, in `--mde-em`; the view gives the room around the
-  text, its padding and the gutter, as `--vtv-page-inset`) and `margin:
+  var(--vtv-page-inset))` (780 px at 100%, 48.75 times `--mde-em`, the user's width of
+  2026-11-04; MaxPad's default is 800; the view gives the room around the text, its padding
+  and the gutter, as `--vtv-page-inset`) and `margin:
   var(--mde-document-margin, 0 auto)`, centered. A page's rule moves it
   (`.mde-content-page { margin: 0 }` puts it at the left); the theme's `documentWidth` (0 for
   no limit) and `centered` set those custom properties. The view then sets no width or
