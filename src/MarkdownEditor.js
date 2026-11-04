@@ -244,6 +244,7 @@ export class MarkdownEditor extends EventTarget {
 
     set readOnly(value) {
         this.view.readOnly = !!value;
+        this.controller.refreshReveal(); // (a read-only document shows no syntax at the caret)
         this._refreshToolbar();
     }
 

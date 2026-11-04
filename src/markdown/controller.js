@@ -330,13 +330,19 @@ export class MarkdownController extends EventTarget {
         return true;
     }
 
-    // The paragraphs whose syntax is shown at the caret: its own, and the other fence of a block of code.
+    /** Shows or hides the syntax at the caret again, after what decides it changed (the view made read-only). */
+    refreshReveal() {
+        if (!this.suspended) this.view.batch(() => this._reveal());
+    }
+
+    // The paragraphs whose syntax is shown at the caret: its own, and the other fence of a block of code. (None in a
+    // read-only document, which is read as the formatted text it is: the user, 2026-11-03.)
     _reveal() {
         const caret = this.selection.caret;
         const paragraphs = this.state.paragraphs;
         const wanted = [];
         const focused = this.view.hasFocus || this.options.revealUnfocused === true;
-        if (this.options.revealSyntax !== false && focused) {
+        if (this.options.revealSyntax !== false && focused && !this.view.readOnly) {
             const index = this.state.projection.paragraphAt(caret);
             const p = paragraphs[index];
             if (p && caret >= p.start && caret <= p.end) {

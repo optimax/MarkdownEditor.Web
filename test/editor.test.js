@@ -165,6 +165,25 @@ test('an editor without the focus shows no syntax', async () => {
     equal(shown(), false, 'not focused: hidden');
 });
 
+test('a read-only editor shows no syntax at the caret', async () => {
+    const stage = document.getElementById('stage');
+    stage.replaceChildren();
+    const editor = new MarkdownEditor(stage, { markdown: '# Title\n\n**bold**', toolbar: false });
+    const shown = (i) => editor.view.paragraphs[i].runs.some((run) => !run.hidden && /[#*]/.test(run.text));
+    editor.view.input.dispatchEvent(new FocusEvent('focus'));
+    await tick();
+    equal(shown(0), true, 'editable: shown at the caret');
+    editor.readOnly = true;
+    await tick();
+    equal(shown(0), false, 'made read-only: hidden');
+    editor.select(10);
+    await tick();
+    equal(shown(1), false, 'and not shown where the caret goes');
+    editor.readOnly = false;
+    await tick();
+    equal(shown(1), true, 'editable again: shown');
+});
+
 // Random commands on documents of every kind: the view stays what the source says, and everything undoes to the
 // document it began as and redoes to the one it ended as.
 const DOCUMENTS = [

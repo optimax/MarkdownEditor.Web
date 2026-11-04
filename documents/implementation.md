@@ -692,7 +692,9 @@ command each `seal` the last step, so that the next starts another.
   showed its syntax and no longer should is restyled back. **An editor without the focus shows
   no syntax** (it reads as the formatted text it is; a page may have several editors);
   `revealUnfocused: true` keeps MaxPad's way, the syntax at the caret always. `revealSyntax:
-  false` never shows it.
+  false` never shows it. **Nor does a read-only document** (2026-11-03, the user: clicking a
+  heading showed its `#`): it reads as the formatted text, and making it read-only
+  (`refreshReveal`, from the editor's `readOnly`) hides what was shown.
 - **The view's edit commands** are mapped to `commands.js` (`_onEditCommand`), each with its
   kind for the history; `copy` answers with the selection's Markdown (`copiedText`); a paste
   with no text raises `pasteother` for the host.
