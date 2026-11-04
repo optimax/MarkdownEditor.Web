@@ -113,13 +113,14 @@ What a page reads and calls:
 | `showOutline` | The outline marks on or off; `collapseAll()`, `expandAll()` fold or open all. |
 | `paragraphNumber` | The caret's paragraph's number, as the gutter shows it: for a status bar. |
 | `theme`, `zoom` | Change the look, or the scale, at any time. |
+| `zoomIn()`, `zoomOut()` | 10% larger or smaller (the toolbar's + and -); `resetZoom()`: 100%. |
 | `readOnly`, `focus()` | As their names say. |
 | `destroy()` | Takes the editor out of the page. |
 
 Events (`addEventListener`): `change` after each change of the Markdown, `selectionchange`,
 `modechange` (the raw view on or off), `toolbarclick` (one of your buttons; `detail.name`),
-and `linkclick` (`detail.href`; call
-`preventDefault()` to handle it yourself).
+`zoomchange`, and `linkclick` (`detail.href`; call `preventDefault()` to handle it
+yourself).
 
 **Your own toolbar buttons** go in the `toolbar` list (or `toolbarItems`) beside the
 editor's names, as objects: `name`, `title`, `icon` (an SVG: a whole `<svg>`, or what goes

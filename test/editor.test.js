@@ -223,6 +223,31 @@ test('the outline in a Markdown document: a heading edited stays collapsed', asy
     ok(!view.isFolded(1));
 });
 
+test('the zoom in the toolbar: smaller, larger, and back to 100%', () => {
+    const stage = document.getElementById('stage');
+    stage.replaceChildren();
+    const editor = new MarkdownEditor(stage, { markdown: 'x', toolbar: ['zoomout', 'zoom', 'zoomin'] });
+    let changes = 0;
+    editor.addEventListener('zoomchange', () => changes++);
+    const [out, label, into] = [...editor.toolbar.querySelectorAll('button')];
+    equal(label.textContent, '100%');
+    into.click();
+    into.click();
+    equal([editor.zoom, label.textContent], [1.2, '120%'], 'ten percent a step');
+    out.click();
+    equal(label.textContent, '110%');
+    editor.zoom = 1.034; // (as Ctrl and the wheel do)
+    equal(label.textContent, '103%', 'the label follows any zoom');
+    into.click();
+    equal(editor.zoom, 1.13, 'a step from the whole percent');
+    label.click();
+    equal([editor.zoom, label.textContent, changes], [1, '100%', 6], 'the label puts it back at 100%');
+    editor.zoom = 5;
+    ok(into.disabled && !out.disabled, 'no larger than the largest');
+    editor.readOnly = true;
+    ok(!out.disabled && !label.disabled, 'on in a read-only document too');
+});
+
 test('the page\'s own toolbar buttons, and the items it chooses', () => {
     const stage = document.getElementById('stage');
     stage.replaceChildren();

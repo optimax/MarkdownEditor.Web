@@ -926,7 +926,13 @@ section 4.11; on by default, as MaxPad's).
   keys are recognized by where they are on the keyboard (`code`), and, for a key that reports
   none (a virtual keyboard's), by what it types.
 - **Zoom** is Ctrl and the mouse wheel, about 2% a notch, as MaxPad's (no keys); the
-  browser's own page zoom is kept out.
+  browser's own page zoom is kept out. The toolbar's last items are MaxPad's Zoom Out, the
+  zoom itself and Zoom In (2026-11-03, TO-DO "Scaling Editor Content"): `zoomOut()` and
+  `zoomIn()` step 10 percent of the text's own size from the whole percent, within the view's
+  25% to 500% (a button is off at its end); the zoom's button says it (`103%`, whatever made
+  it, the wheel too) and puts it back at 100% (`resetZoom()`, MaxPad's Actual Size). They are
+  view items, on in a read-only document and in the raw view. `zoomchange` follows every
+  change of `zoom`.
 - **The toolbar:** buttons with inline SVG icons that do not take the focus (a click keeps
   the caret in the editor), and a list of paragraph and heading levels. After every change
   and every move of the caret it shows which formats are on, the paragraph's type, and

@@ -25,6 +25,7 @@ const CSS = `
 .mde-toolbar button:disabled { opacity: 0.4; cursor: default; }
 .mde-toolbar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round;
   stroke-linejoin: round; }
+.mde-toolbar .mde-zoom { min-width: 48px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .mde-toolbar .mde-sep { width: 1px; height: 20px; margin: 0 4px; background: var(--mde-line); }
 .mde-toolbar select { font: 13px system-ui, sans-serif; height: 28px; border: 1px solid var(--mde-line); border-radius: 6px;
   background: var(--mde-bg); color: var(--mde-ink); padding: 0 4px; }
@@ -70,6 +71,8 @@ const ICONS = {
     numbers: '<path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="M16 3l-2 18"/>',
     types: '<path d="M4 6h9"/><path d="M4 12h6"/><path d="M4 18h9"/><path d="M16 9l3 3-3 3"/>',
     outline: '<path d="m4 6 3 3 3-3"/><path d="M13 7h7"/><path d="m5 14 3 3-3 3"/><path d="M13 17h7"/>',
+    zoomout: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="M8 11h6"/>',
+    zoomin: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="M8 11h6"/><path d="M11 8v6"/>',
     raw: '<path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/>' +
         '<path d="m10 13-2 2 2 2"/><path d="m14 17 2-2-2-2"/>',
 };
@@ -77,13 +80,16 @@ const ICONS = {
 /** The toolbar's items, in order ('|' a separator): what `toolbar: true` shows. */
 export const DEFAULT_TOOLBAR = ['undo', 'redo', '|', 'block', '|', 'strong', 'em', 'underline', 'strike', 'code', '|',
     'quote', 'bullet', 'number', 'task', 'codeblock', '|', 'link', 'image', 'table', 'rule', '|', 'marks', 'numbers',
-    'types', 'outline', 'raw'];
+    'types', 'outline', 'raw', '|', 'zoomout', 'zoom', 'zoomin'];
 
 // (what the raw Markdown view leaves on: the rest of the toolbar formats, which the source shown as it is has none of)
-const RAW_ITEMS = new Set(['undo', 'redo', 'marks', 'numbers', 'types', 'outline', 'raw']);
+const RAW_ITEMS = new Set(['undo', 'redo', 'marks', 'numbers', 'types', 'outline', 'raw', 'zoomout', 'zoom', 'zoomin']);
 
 // (the toolbar's switches of the view, which are on in a read-only document too)
-const VIEW_ITEMS = new Set(['marks', 'numbers', 'types', 'outline', 'raw']);
+const VIEW_ITEMS = new Set(['marks', 'numbers', 'types', 'outline', 'raw', 'zoomout', 'zoom', 'zoomin']);
+
+// (the zoom buttons' step, in percent of the text's own size, and the view's limits: 25% to 500%)
+const ZOOM_STEP = 10, MIN_ZOOM = 0.25, MAX_ZOOM = 5;
 
 const LABELS = {
     undo: 'Undo (Ctrl+Z)', redo: 'Redo (Ctrl+Y)', strong: 'Bold (Ctrl+B)', em: 'Italic (Ctrl+I)', underline: 'Underline (Ctrl+U)',
@@ -92,7 +98,8 @@ const LABELS = {
     codeblock: 'Code block (Ctrl+Alt+C)', link: 'Link (Ctrl+K)', image: 'Picture', table: 'Table',
     rule: 'Horizontal line (Ctrl+Alt+L)', marks: 'Paragraph marks', block: 'Paragraph or heading (Ctrl+0 to Ctrl+6)',
     raw: 'Markdown source (Ctrl+Shift+R)', numbers: 'Paragraph numbers', types: 'Paragraph types',
-    outline: 'Outline marks (fold what a heading heads)',
+    outline: 'Outline marks (fold what a heading heads)', zoomout: 'Zoom out', zoomin: 'Zoom in',
+    zoom: 'Zoom (click for 100%; Ctrl+wheel zooms too)',
 };
 
 const BLOCK_OPTIONS = [['paragraph', 'Paragraph'], ['h1', 'Heading 1'], ['h2', 'Heading 2'], ['h3', 'Heading 3'],
@@ -351,13 +358,32 @@ export class MarkdownEditor extends EventTarget {
         this._refreshToolbar();
     }
 
-    /** The scale the document is shown at (1 is 100%). */
+    /** The scale the document is shown at (1 is 100%; 0.25 to 5). 'zoomchange' after it changes. */
     get zoom() {
         return this.view.zoom;
     }
 
     set zoom(value) {
+        const before = this.view.zoom;
         this.view.zoom = value;
+        if (this.view.zoom === before) return;
+        this._refreshToolbar();
+        this.dispatchEvent(new Event('zoomchange'));
+    }
+
+    /** One step larger (10 percent more of the text's own size, as MaxPad's Zoom In, from the whole percent). */
+    zoomIn() {
+        this.zoom = (Math.round(this.zoom * 100) + ZOOM_STEP) / 100;
+    }
+
+    /** One step smaller (MaxPad's Zoom Out). */
+    zoomOut() {
+        this.zoom = (Math.round(this.zoom * 100) - ZOOM_STEP) / 100;
+    }
+
+    /** The text at its own size, 100% (MaxPad's Actual Size). */
+    resetZoom() {
+        this.zoom = 1;
     }
 
     /** The selection in the Markdown: { anchor, caret }, offsets in the source with "\n" line endings. */
@@ -503,6 +529,9 @@ export class MarkdownEditor extends EventTarget {
             case 'outline':
                 this.showOutline = !this.showOutline;
                 return undefined;
+            case 'zoomin': return this.zoomIn();
+            case 'zoomout': return this.zoomOut();
+            case 'zoom': return this.resetZoom();
             case 'collapseAll': return this.collapseAll();
             case 'expandAll': return this.expandAll();
             case 'raw': return this.toggleRawMode();
@@ -634,6 +663,7 @@ export class MarkdownEditor extends EventTarget {
             button.title = LABELS[item] ?? item;
             button.setAttribute('aria-label', LABELS[item] ?? item);
             button.innerHTML = ICONS[item] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[item]}</svg>` : item;
+            if (item === 'zoom') button.className = 'mde-zoom'; // (its text is the zoom: _refreshToolbar)
             // (a click keeps the caret in the editor: the button does not take the focus)
             button.addEventListener('mousedown', (event) => event.preventDefault());
             button.addEventListener('click', () => {
@@ -691,6 +721,11 @@ export class MarkdownEditor extends EventTarget {
             else if (item === 'numbers') pressed = this.showParagraphNumbers;
             else if (item === 'types') pressed = this.showParagraphTypes;
             else if (item === 'outline') pressed = this.showOutline;
+            else if (item === 'zoom') {
+                const text = Math.round(this.zoom * 100) + '%';
+                if (button.textContent !== text) button.textContent = text;
+            } else if (item === 'zoomin') button.disabled = this.zoom >= MAX_ZOOM - 1e-9;
+            else if (item === 'zoomout') button.disabled = this.zoom <= MIN_ZOOM + 1e-9;
             if (pressed !== null) button.setAttribute('aria-pressed', String(pressed));
             if (item === 'undo') button.disabled = readOnly || !this.canUndo;
             else if (item === 'redo') button.disabled = readOnly || !this.canRedo;
