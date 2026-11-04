@@ -185,7 +185,7 @@ export class MarkdownStyleProvider {
                     padding: [4, 8, 4, 8],
                 };
             case 'table-cell':
-                return { ...body, name: 'Table cell', margin: 0, padding: [4, 8, 4, 8] };
+                return { ...body, name: 'Table row', margin: 0, padding: [4, 8, 4, 8] };
             default: {
                 const match = /^h([1-6])$/.exec(kind);
                 if (!match) return { ...body, margin: [0, 0, t.paragraphSpacing, 0] };

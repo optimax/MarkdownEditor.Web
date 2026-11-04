@@ -793,7 +793,9 @@ light background; quotes in a quiet color.
   **names** in `paragraphTypeColor`, MaxPad's green (#137A10; a lighter one in the dark
   theme). The names are the styles' (`Heading 1`, `Bullet`, `List`, `Check`, `Code`, `Code
   fence`, `Table header`, `Rule`...); a plain paragraph is named by what it is in, as
-  MaxPad's: `Quote item` (in a quote and a list), `Quote`, `List item`, or `Paragraph`.
+  MaxPad's: `Quote item` (in a quote and a list), `Quote`, `List item`, or `Paragraph`. The
+  cells of a table's body are `Table row`, the name the gutter shows once for each of its
+  rows (2026-11-03, the user).
 - **The raw view's look** (`RawStyleProvider`, MaxPad's): the theme's code font a little
   smaller than the body, no margins, nothing hidden or styled, and a light band behind the
   caret's line (the theme's `currentLineColor`, or a light yellow, a dark one in a dark

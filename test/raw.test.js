@@ -101,7 +101,7 @@ test('the paragraph types of the two views agree, and follow the source', () => 
         return out;
     };
     const formatted = typesOf();
-    equal(formatted, ['Heading 1', 'Paragraph', 'Quote', 'Table header', 'Table cell', 'Code fence', 'Code', 'Code fence',
+    equal(formatted, ['Heading 1', 'Paragraph', 'Quote', 'Table header', 'Table row', 'Code fence', 'Code', 'Code fence',
         'Bullet', 'Bullet']);
     editor.rawMode = true;
     equal(typesOf(), formatted, 'each line of the source has the type of the block it begins');
