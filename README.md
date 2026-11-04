@@ -174,7 +174,7 @@ text (section 10 of `documents/implementation.md` lists every class).
 .mde-content { --mde-document-width: 40em; }
 ```
 
-The document is centered in the editor and at most 780 px wide (at 100%): the page,
+The document is centered in the editor and at most 720 px wide (at 100%): the page,
 `.mde-content-page`, has `margin: 0 auto` and its `max-width` from `--mde-document-width`.
 
 ## Keys

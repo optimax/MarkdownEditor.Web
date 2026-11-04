@@ -37,7 +37,7 @@ export const LIGHT_THEME = Object.freeze({
     caretColor: '#000000',
     highlightColor: 'rgba(255, 213, 0, 0.45)',
     currentLineColor: '#fffbdd',
-    documentWidth: 780,
+    documentWidth: 720,
     centered: true,
     listIndent: 28,
     paragraphSpacing: 8,

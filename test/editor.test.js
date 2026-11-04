@@ -238,7 +238,7 @@ test('where the document goes is the stylesheet\'s: centered, or as a page\'s ru
         const [left, right] = room();
         ok(left > 100 && Math.abs(left - right) <= 20, 'centered by the default stylesheet');
         const width = view.content.getBoundingClientRect().width;
-        ok(Math.abs(width - 780) < 1, 'the text 780 px wide at most');
+        ok(Math.abs(width - 720) < 1, 'the text 720 px wide at most');
         const page = document.createElement('style');
         page.textContent = '.mde-content-page { margin: 0; }';
         document.head.append(page);

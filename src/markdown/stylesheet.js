@@ -52,7 +52,7 @@ export const MARKDOWN_CSS = `
   --mde-quote-step: calc(0.875 * var(--mde-em));
   --mde-quote-bar: calc(0.1875 * var(--mde-em));
   --mde-list-indent: calc(1.75 * var(--mde-em));
-  --mde-document-width: calc(48.75 * var(--mde-em)); /* (780 px at 16 px and 100%) */
+  --mde-document-width: calc(45 * var(--mde-em)); /* (720 px at 16 px and 100%) */
   font-family: var(--mde-font-family);
   font-size: var(--mde-em);
   color: var(--mde-color);
