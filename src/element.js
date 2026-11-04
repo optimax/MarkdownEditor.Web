@@ -8,7 +8,8 @@
 //     </script>
 //   </markdown-editor>
 //
-// Attributes: `src` (a Markdown file to load), `theme` ("light" or "dark"), `toolbar` ("false" for none), `readonly`,
+// Attributes: `src` (a Markdown file to load), `theme` ("light" or "dark"), `toolbar` ("false" for none, or the names of
+// the items wanted, in order, separated by spaces or commas: "undo redo | strong em"), `readonly`,
 // `name` (the field's name in a form: the element is a form field whose value is the Markdown), `image-base`,
 // `paragraph-numbers` (each paragraph's number in a gutter), `paragraph-types` (each paragraph's type there).
 // Properties: `value`, `editor` (the MarkdownEditor). Events: 'change' (and 'input', for forms), 'linkclick'.
@@ -26,9 +27,19 @@ function initialMarkdown(element) {
     return text.split('\n').map((line) => line.slice(Math.min(common, /^[ \t]*/.exec(line)[0].length))).join('\n');
 }
 
+// The toolbar an attribute asks for: all of it (none given, or "true"), none ("false"), or the items it names.
+function toolbarOf(attribute) {
+    const text = (attribute ?? '').trim();
+    if (!text || text === 'true') return true;
+    if (text === 'false') return false;
+    return text.split(/[\s,]+/).filter(Boolean);
+}
+
 export class MarkdownEditorElement extends HTMLElement {
     static formAssociated = true;
-    static observedAttributes = ['readonly', 'theme', 'src', 'image-base', 'paragraph-numbers', 'paragraph-types'];
+    static observedAttributes = [
+        'readonly', 'theme', 'src', 'image-base', 'paragraph-numbers', 'paragraph-types', 'toolbar',
+    ];
 
     constructor() {
         super();
@@ -43,7 +54,7 @@ export class MarkdownEditorElement extends HTMLElement {
         this.editor = new MarkdownEditor(this, {
             markdown,
             theme: this.getAttribute('theme') ?? 'light',
-            toolbar: this.getAttribute('toolbar') !== 'false',
+            toolbar: toolbarOf(this.getAttribute('toolbar')),
             readOnly: this.hasAttribute('readonly'),
             imageBase: this.getAttribute('image-base') ?? undefined,
             showParagraphNumbers: this.hasAttribute('paragraph-numbers'),
@@ -70,6 +81,7 @@ export class MarkdownEditorElement extends HTMLElement {
         else if (name === 'image-base') this.editor.imageBase = value;
         else if (name === 'paragraph-numbers') this.editor.showParagraphNumbers = value !== null;
         else if (name === 'paragraph-types') this.editor.showParagraphTypes = value !== null;
+        else if (name === 'toolbar') this.editor.toolbarItems = toolbarOf(value);
     }
 
     async _load(url) {

@@ -100,8 +100,8 @@ export class MarkdownEditor extends EventTarget {
     /**
      * @param {HTMLElement|string} target The element (or a selector of it) the editor goes into; it fills it.
      * @param {object} [options] { markdown, theme ('light' | 'dark' | a theme object), toolbar (true, false, or a list
-     *   of DEFAULT_TOOLBAR's items), readOnly, revealSyntax (the syntax at the caret shown; true by default),
-     *   revealUnfocused (shown while the editor has no focus too; false by default), showFormattingMarks,
+     *   of DEFAULT_TOOLBAR's items and the page's own buttons: `toolbarItems`), readOnly, revealSyntax (the syntax
+     *   at the caret shown; true by default), revealUnfocused (shown while the editor has no focus too; false by default), showFormattingMarks,
      *   imageBase (the URL relative pictures are loaded from), openLinks (Ctrl+click opens a link in a new tab; true
      *   by default), prompt (an async function (question, value) asking the user for a link's or a picture's
      *   address; window.prompt by default), rawMode (start in the raw Markdown view), showParagraphNumbers (each
@@ -533,16 +533,48 @@ export class MarkdownEditor extends EventTarget {
         });
     }
 
+    /**
+     * The toolbar's items, in order: DEFAULT_TOOLBAR's names (a page picks which it wants, in its order), '|' for a
+     * separator, and the page's own buttons, each an object { name, title, icon (an SVG: a whole <svg> element, or what
+     * goes inside a 24 x 24 one drawn as the editor's icons are, in strokes), label (text, for a button with no icon),
+     * onClick(editor, event), pressed(editor) (true or false: a switch, shown pressed or not), enabled(editor) }. A click
+     * on one of the page's buttons calls its `onClick` and raises 'toolbarclick' (`detail.name`, `detail.item`); the
+     * caret stays in the editor. Setting it builds the toolbar again; an empty list (or false) shows none.
+     */
+    get toolbarItems() {
+        return [...(this._toolbarItems ?? [])];
+    }
+
+    set toolbarItems(items) {
+        this.options.toolbar = items;
+        this.toolbar?.remove();
+        this.toolbar = null;
+        this.blockSelect = null;
+        this._buildToolbar();
+        this.refreshToolbar();
+    }
+
+    /** Shows again what the toolbar's buttons say (pressed, enabled): for a page whose own buttons' state changed. */
+    refreshToolbar() {
+        this._refreshToolbar();
+    }
+
     _buildToolbar() {
         const toolbar = this.options.toolbar;
-        const items = toolbar === true ? DEFAULT_TOOLBAR : Array.isArray(toolbar) ? toolbar : null;
+        const items = toolbar === true ? DEFAULT_TOOLBAR : Array.isArray(toolbar) && toolbar.length ? toolbar : null;
         this.buttons = new Map();
+        this._customButtons = new Map();
+        this._toolbarItems = items ? [...items] : [];
         if (!items) return;
         const bar = document.createElement('div');
         bar.className = 'mde-toolbar';
         bar.setAttribute('role', 'toolbar');
         bar.setAttribute('aria-label', 'Formatting');
         for (const item of items) {
+            if (item && typeof item === 'object') {
+                bar.append(this._customButton(item));
+                continue;
+            }
             if (item === '|') {
                 const separator = document.createElement('span');
                 separator.className = 'mde-sep';
@@ -580,7 +612,37 @@ export class MarkdownEditor extends EventTarget {
         this.toolbar = bar;
     }
 
+    // A button of the page's own (`toolbarItems`): drawn as the editor's are, its click the page's.
+    _customButton(item) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        const title = item.title ?? item.label ?? item.name ?? '';
+        if (title) {
+            button.title = title;
+            button.setAttribute('aria-label', title);
+        }
+        const icon = typeof item.icon === 'string' ? item.icon.trim() : '';
+        if (icon.startsWith('<svg')) button.innerHTML = icon;
+        else if (icon) button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>`;
+        else button.textContent = item.label ?? item.name ?? '?';
+        if (item.name) button.dataset.name = item.name;
+        button.addEventListener('mousedown', (event) => event.preventDefault());
+        button.addEventListener('click', (event) => {
+            item.onClick?.(this, event);
+            this.dispatchEvent(new CustomEvent('toolbarclick', { detail: { name: item.name ?? null, item } }));
+            this._refreshToolbar();
+            if (item.keepFocus !== false) this.focus();
+        });
+        this._customButtons.set(button, item);
+        return button;
+    }
+
     _refreshToolbar() {
+        for (const [button, item] of this._customButtons ?? []) {
+            const pressed = item.pressed?.(this);
+            if (pressed === true || pressed === false) button.setAttribute('aria-pressed', String(pressed));
+            if (item.enabled) button.disabled = !item.enabled(this);
+        }
         if (!this.buttons?.size && !this.blockSelect) return;
         const readOnly = this.readOnly, raw = this.raw.isOn;
         const type = this.blockType;

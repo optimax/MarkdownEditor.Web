@@ -846,6 +846,17 @@ provider from the theme and the controller from the Markdown. Options: `markdown
   whether undo and redo can be done. Its last buttons switch the view: the paragraph marks,
   the paragraph numbers, the paragraph types and the raw Markdown view, which are on in a
   read-only document too; while the raw view is on, only undo, redo and those four are on.
+- **The page's own buttons** (2026-11-03, the user: custom buttons with SVG glyphs that look
+  like the editor's, and the page choosing which of the editor's show): an item of the
+  toolbar's list may be an object, `{ name, title, icon, label, onClick, pressed, enabled,
+  keepFocus }`, built by `_customButton` as the editor's buttons are (an `icon` that is not a
+  whole `<svg>` goes in a 24 x 24 one, drawn in strokes as the editor's icons are; a `label`
+  is text). Its click calls `onClick(editor, event)`, raises `toolbarclick` (`detail.name`,
+  `detail.item`), shows the toolbar's state again and puts the focus back in the editor;
+  `pressed` and `enabled` are asked at every refresh of the toolbar (`refreshToolbar()`, for
+  a page whose own state changed). `toolbarItems` (get and set) is the list: setting it
+  builds the toolbar again, so a page chooses which of the editor's items show, in its order.
+  The demo's dark theme and read-only switches are such buttons.
 - **Links:** Ctrl+click raises `linkclick` (`detail.href`, `detail.title`); unless the page
   cancels it, an `http`, `https` or `mailto` link opens in a new tab.
 - **Theme colors** for the frame and the toolbar are CSS variables on the root, set from the
@@ -871,8 +882,9 @@ provider from the theme and the controller from the Markdown. Options: `markdown
   or `<template>` in it, or its own text, with the first and last blank lines and the
   indentation its lines share taken off (so that the Markdown can be indented in the HTML).
   `src` loads a file, and makes the file's folder where its pictures are loaded from.
-- **Attributes:** `theme`, `toolbar="false"`, `readonly`, `image-base`, `src`, `name`,
-  `paragraph-numbers`, `paragraph-types`.
+- **Attributes:** `theme`, `toolbar` (`"false"` for none, or the names of the items wanted,
+  separated by spaces or commas: `"undo redo | strong em"`), `readonly`, `image-base`, `src`,
+  `name`, `paragraph-numbers`, `paragraph-types`.
 - **A form field:** it is form-associated (`ElementInternals`): a form submits its Markdown
   under its `name`, and it raises `input` and `change` (bubbling) after each change, and
   `linkclick`.

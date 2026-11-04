@@ -165,6 +165,37 @@ test('an editor without the focus shows no syntax', async () => {
     equal(shown(), false, 'not focused: hidden');
 });
 
+test('the page\'s own toolbar buttons, and the items it chooses', () => {
+    const stage = document.getElementById('stage');
+    stage.replaceChildren();
+    let on = false, clicks = 0, events = [];
+    const mine = {
+        name: 'mine', title: 'Mine', icon: '<path d="M4 4h16"/>', pressed: () => on, onClick: (editor) => {
+            on = !on;
+            clicks += editor instanceof MarkdownEditor ? 1 : 0;
+        },
+    };
+    const text = { name: 'hello', label: 'Hi', enabled: (editor) => !editor.readOnly };
+    const editor = new MarkdownEditor(stage, { markdown: 'x', toolbar: ['strong', '|', mine, text] });
+    editor.addEventListener('toolbarclick', (event) => events.push(event.detail.name));
+    const buttons = () => [...editor.toolbar.querySelectorAll('button')];
+    equal(buttons().length, 3, 'only the items asked for');
+    const [, button, hello] = buttons();
+    equal([button.title, !!button.querySelector('svg path'), hello.textContent], ['Mine', true, 'Hi']);
+    equal(button.getAttribute('aria-pressed'), 'false');
+    button.click();
+    equal([on, clicks, button.getAttribute('aria-pressed')], [true, 1, 'true'], 'its click is the page\'s; pressed');
+    hello.click();
+    equal(events, ['mine', 'hello'], 'and each raises toolbarclick');
+    editor.readOnly = true;
+    ok(hello.disabled, 'enabled as the page says');
+    editor.toolbarItems = ['undo', 'redo'];
+    equal(buttons().length, 2, 'the items changed');
+    equal(editor.toolbarItems, ['undo', 'redo']);
+    editor.toolbarItems = false;
+    equal(editor.toolbar, null, 'no toolbar');
+});
+
 test('a read-only editor shows no syntax at the caret', async () => {
     const stage = document.getElementById('stage');
     stage.replaceChildren();

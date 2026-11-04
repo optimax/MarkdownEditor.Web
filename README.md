@@ -59,8 +59,8 @@ powershell -ExecutionPolicy Bypass -File tools/serve.ps1
 
 Then open:
 
-- <http://localhost:8765/demo/index.html>: the editor, with its toolbar, the Markdown
-  shown and edited in place ("Show the Markdown"), a dark theme and read-only mode.
+- <http://localhost:8765/demo/index.html>: the editor, with its toolbar and two buttons of
+  the page's own in it: a dark theme and read-only mode.
 - <http://localhost:8765/demo/element.html>: `<markdown-editor>` in a form.
 - <http://localhost:8765/demo/tinypad.html>: TinyPad, the tutorial's small word processor,
   on the bare `VirtualTextView`.
@@ -76,7 +76,7 @@ of one). The options, all optional:
 | --- | --- |
 | `markdown` | The document to start with. |
 | `theme` | `'light'` (the default), `'dark'`, or a theme object (below). |
-| `toolbar` | `true` (the default), `false`, or a list of `DEFAULT_TOOLBAR`'s items. |
+| `toolbar` | `true` (the default), `false`, or a list of `DEFAULT_TOOLBAR`'s items and of your own buttons (below). |
 | `readOnly` | The document can be read, selected and copied, not changed. |
 | `revealSyntax` | Show the syntax at the caret (`true` by default). |
 | `revealUnfocused` | Show it while the editor has no focus too (`false` by default). |
@@ -104,6 +104,8 @@ What a page reads and calls:
 | `insertTable()` | Also `insertRule()`, `insertCodeBlock()`, `insertLink(url)`, |
 | | `insertImage(url, alt)`. |
 | `execute(name)` | Any toolbar command by name (`'h2'`, `'bullet'`, `'link'`...). |
+| `toolbarItems` | The toolbar's items: set it to change which buttons show, and their order. |
+| `refreshToolbar()` | Shows your own buttons' state again (pressed, enabled). |
 | `rawMode`, `toggleRawMode()` | The raw Markdown view on or off (below). |
 | `showParagraphNumbers` | The gutter's paragraph numbers on or off (the toolbar's # button). |
 | `showParagraphTypes` | The gutter's paragraph types on or off (the toolbar's button beside #). |
@@ -113,8 +115,31 @@ What a page reads and calls:
 | `destroy()` | Takes the editor out of the page. |
 
 Events (`addEventListener`): `change` after each change of the Markdown, `selectionchange`,
-`modechange` (the raw view on or off), and `linkclick` (`detail.href`; call
+`modechange` (the raw view on or off), `toolbarclick` (one of your buttons; `detail.name`),
+and `linkclick` (`detail.href`; call
 `preventDefault()` to handle it yourself).
+
+**Your own toolbar buttons** go in the `toolbar` list (or `toolbarItems`) beside the
+editor's names, as objects: `name`, `title`, `icon` (an SVG: a whole `<svg>`, or what goes
+in a 24 x 24 one drawn in strokes, as the editor's icons are), or `label` (text), and
+`onClick(editor, event)`; `pressed(editor)` makes it a switch shown pressed or not, and
+`enabled(editor)` says when it can be clicked. They look like the editor's own buttons, and
+the caret stays in the editor.
+
+```js
+const lock = {
+  name: 'readonly', title: 'Read-only',
+  icon: '<rect x="4" y="11" width="16" height="10" rx="2"/>' +
+    '<path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  pressed: (editor) => editor.readOnly,
+  onClick: (editor) => (editor.readOnly = !editor.readOnly),
+};
+new MarkdownEditor('#editor', {
+  toolbar: ['undo', 'redo', '|', 'strong', 'em', '|', lock],
+});
+```
+
+`<markdown-editor toolbar="undo redo | strong em">` picks the editor's items by name.
 
 **The raw Markdown view** (`rawMode`, the toolbar's last button, Ctrl+Shift+R) shows the
 Markdown itself in the editor, as plain text, and lets you edit it there, as MaxPad's View >

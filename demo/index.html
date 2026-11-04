@@ -22,9 +22,6 @@
 <body>
 <header>
   <h1>Markdown Editor</h1>
-  <label title="Ctrl+Shift+R"><input type="checkbox" id="show-source"> Show the Markdown</label>
-  <label><input type="checkbox" id="dark"> Dark</label>
-  <label><input type="checkbox" id="readonly"> Read-only</label>
   <button id="download">Download .md</button>
 </header>
 <main>
@@ -32,21 +29,34 @@
 </main>
 <footer id="status"></footer>
 <script type="module">
-  import { MarkdownEditor } from '../src/index.js';
+  import { MarkdownEditor, DEFAULT_TOOLBAR } from '../src/index.js';
+
+  // The page's own buttons in the editor's toolbar, after the editor's: the dark theme and read-only, each a switch.
+  // (The raw Markdown view is the editor's own last button, and Ctrl+Shift+R.)
+  let dark = false;
+  const darkButton = {
+    name: 'dark', title: 'Dark theme', pressed: () => dark,
+    icon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/>',
+    onClick: (editor) => {
+      dark = !dark;
+      editor.theme = dark ? 'dark' : 'light';
+      document.body.style.setProperty('--bg', dark ? '#151618' : '#eef0f3');
+      document.body.style.setProperty('--ink', dark ? '#e6e6e6' : '#1f2328');
+    },
+  };
+  const readOnlyButton = {
+    name: 'readonly', title: 'Read-only', pressed: (editor) => editor.readOnly,
+    icon: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    onClick: (editor) => (editor.readOnly = !editor.readOnly),
+  };
 
   const sample = await fetch('sample.md').then((response) => response.text());
-  const editor = new MarkdownEditor('#editor', { markdown: sample, imageBase: new URL('./', location.href).href });
+  const editor = new MarkdownEditor('#editor', {
+    markdown: sample, imageBase: new URL('./', location.href).href,
+    toolbar: [...DEFAULT_TOOLBAR, '|', darkButton, readOnlyButton],
+  });
   window.editor = editor;
   editor.focus();
-
-  // "Show the Markdown" is the editor's raw Markdown view: the source shown and edited in place, as MaxPad's View > Raw
-  // Markdown (the toolbar's last button and Ctrl+Shift+R switch it too).
-  const showSource = document.getElementById('show-source');
-  showSource.addEventListener('change', () => {
-    editor.rawMode = showSource.checked;
-    editor.focus();
-  });
-  editor.addEventListener('modechange', () => (showSource.checked = editor.rawMode));
 
   const status = document.getElementById('status');
   let savedVersion = editor.version;
@@ -60,11 +70,6 @@
   editor.addEventListener('modechange', refresh);
   refresh();
 
-  document.getElementById('dark').addEventListener('change', (event) => {
-    editor.theme = event.target.checked ? 'dark' : 'light';
-    document.body.style.setProperty('--bg', event.target.checked ? '#151618' : '#eef0f3');
-  });
-  document.getElementById('readonly').addEventListener('change', (event) => (editor.readOnly = event.target.checked));
   document.getElementById('download').addEventListener('click', () => {
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([editor.value], { type: 'text/markdown' }));
