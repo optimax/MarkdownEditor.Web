@@ -87,6 +87,34 @@ test('paragraph numbers in the gutter, a table\'s row being one', () => {
     equal(view.content.getBoundingClientRect().left, left, 'and its room is given back');
 });
 
+test('style names in the gutter, outside the numbers', () => {
+    const styles = { getParagraphStyle: (id) => (id === 'h1' ? { name: 'Heading 1', fontSize: 28 } : {}) };
+    const { view } = makeView([{ styleId: 'h1', runs: [{ text: 'Title' }] }, { styleId: 'odd', runs: [{ text: 'x' }] },
+        plainParagraph('y')], styles);
+    const shown = (selector) => [...view.gutter.querySelectorAll(selector)]
+        .filter((label) => label.style.display !== 'none');
+    const left = view.content.getBoundingClientRect().left;
+    view.leftGutterContent = GutterContent.StyleNames;
+    equal(shown('.vtv-gutter-name').map((name) => name.textContent), ['Heading 1', 'odd'],
+        'the style\'s name, else its ID; nothing for no style');
+    equal(shown('.vtv-gutter-label'), [], 'no numbers');
+    const namesOnly = view.content.getBoundingClientRect().left;
+    ok(namesOnly > left, 'the names take room');
+    view.leftGutterContent = GutterContent.StyleNames | GutterContent.ParagraphNumbers;
+    ok(view.content.getBoundingClientRect().left > namesOnly, 'and the numbers more');
+    const name = shown('.vtv-gutter-name')[0].getBoundingClientRect();
+    const number = shown('.vtv-gutter-label')[0].getBoundingClientRect();
+    ok(name.right < number.left, 'the names left of the numbers');
+    ok(Math.abs(name.bottom - number.bottom) < 1, 'on the same line');
+    view.paragraphLabels = (index) => (index === 0 ? 'Mine' : index === 1 ? '' : null);
+    equal(shown('.vtv-gutter-name').map((label) => label.textContent), ['Mine'], 'the host\'s names first');
+    view.paragraphLabels = (index) => (index === 0 ? 'A name much too long to fit in the column' : null);
+    const long = shown('.vtv-gutter-name')[0];
+    ok(long.scrollWidth > long.clientWidth, 'a long name is cut to its column');
+    view.leftGutterContent = GutterContent.None;
+    equal(view.content.getBoundingClientRect().left, left, 'and the room given back');
+});
+
 test('positions, text and selection', () => {
     const { view } = makeView(['ab', 'cde']);
     view.select(pos(0, 1), pos(1, 2));

@@ -9,7 +9,7 @@ export { MarkdownEditor, DEFAULT_TOOLBAR } from './MarkdownEditor.js';
 export { MarkdownEditorElement } from './element.js';
 export { MarkdownController, lineEndingOf } from './markdown/controller.js';
 export { MarkdownStyleProvider, RawStyleProvider, LIGHT_THEME, DARK_THEME } from './markdown/styleProvider.js';
-export { RawMode, RawHistory, rawStarts, rawTexts, sourceOfRaw } from './markdown/rawView.js';
+export { RawMode, RawHistory, rawStarts, rawTexts, rawTypes, sourceOfRaw } from './markdown/rawView.js';
 export { parseMarkdown } from './markdown/parser.js';
 export { project, viewRunsOf, styleIdOf, parseStyleId } from './markdown/projection.js';
 export { MarkdownState } from './markdown/state.js';

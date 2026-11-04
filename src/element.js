@@ -10,7 +10,7 @@
 //
 // Attributes: `src` (a Markdown file to load), `theme` ("light" or "dark"), `toolbar` ("false" for none), `readonly`,
 // `name` (the field's name in a form: the element is a form field whose value is the Markdown), `image-base`,
-// `paragraph-numbers` (each paragraph's number in a gutter).
+// `paragraph-numbers` (each paragraph's number in a gutter), `paragraph-types` (each paragraph's type there).
 // Properties: `value`, `editor` (the MarkdownEditor). Events: 'change' (and 'input', for forms), 'linkclick'.
 
 import { MarkdownEditor } from './MarkdownEditor.js';
@@ -28,7 +28,7 @@ function initialMarkdown(element) {
 
 export class MarkdownEditorElement extends HTMLElement {
     static formAssociated = true;
-    static observedAttributes = ['readonly', 'theme', 'src', 'image-base', 'paragraph-numbers'];
+    static observedAttributes = ['readonly', 'theme', 'src', 'image-base', 'paragraph-numbers', 'paragraph-types'];
 
     constructor() {
         super();
@@ -47,6 +47,7 @@ export class MarkdownEditorElement extends HTMLElement {
             readOnly: this.hasAttribute('readonly'),
             imageBase: this.getAttribute('image-base') ?? undefined,
             showParagraphNumbers: this.hasAttribute('paragraph-numbers'),
+            showParagraphTypes: this.hasAttribute('paragraph-types'),
         });
         this.editor.addEventListener('change', () => {
             this._internals?.setFormValue(this.editor.value);
@@ -68,6 +69,7 @@ export class MarkdownEditorElement extends HTMLElement {
         else if (name === 'src' && value) this._load(value);
         else if (name === 'image-base') this.editor.imageBase = value;
         else if (name === 'paragraph-numbers') this.editor.showParagraphNumbers = value !== null;
+        else if (name === 'paragraph-types') this.editor.showParagraphTypes = value !== null;
     }
 
     async _load(url) {

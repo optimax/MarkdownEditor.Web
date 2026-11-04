@@ -11,7 +11,8 @@
 //   script ('sub' | 'super'), hidden, css }
 // DocumentStyle: { maxWidth, placement ('left' | 'center'), background, color, selectionColor, caretColor,
 //   highlightColor, currentLineColor (a band behind the caret's line; none by default), gutter: { fontFamily,
-//   fontSize, bold, color, background, borderColor (a line between the gutter and the text) } }
+//   fontSize, bold, color (the numbers'), namesColor (the style names'; the numbers' color by default), background,
+//   borderColor (a line between the gutter and the text) } }
 
 export const DEFAULT_PARAGRAPH_STYLE = Object.freeze({
     name: '', fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', fontSize: 16, bold: false,
@@ -28,7 +29,7 @@ export const DEFAULT_DOCUMENT_STYLE = Object.freeze({
     currentLineColor: null,
     gutter: Object.freeze({
         fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif', fontSize: 12, bold: false, color: '#808080',
-        background: null, borderColor: null,
+        namesColor: null, background: null, borderColor: null,
     }),
 });
 

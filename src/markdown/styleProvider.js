@@ -3,7 +3,7 @@
 // give in part: { fontFamily, fontSize, codeFontFamily, color, background, headingColor, linkColor, syntaxColor,
 // quietColor, codeBackground, codeFrameColor, inlineCodeBackground, quoteBarColor, ruleColor, tableBorderColor,
 // tableHeaderBackground, selectionColor, caretColor, highlightColor, documentWidth, centered, listIndent,
-// paragraphSpacing, headingLines, paragraphNumberColor, gutterFontSize, currentLineColor }.
+// paragraphSpacing, headingLines, paragraphNumberColor, paragraphTypeColor, gutterFontSize, currentLineColor }.
 
 import { parseStyleId } from './projection.js';
 
@@ -34,6 +34,7 @@ export const LIGHT_THEME = Object.freeze({
     paragraphSpacing: 8,
     headingLines: [3, 2, 1, 0.5, 0, 0],
     paragraphNumberColor: '#ab2899',
+    paragraphTypeColor: '#137a10',
     gutterFontSize: 12,
 });
 
@@ -57,6 +58,7 @@ export const DARK_THEME = Object.freeze({
     caretColor: '#ffffff',
     highlightColor: 'rgba(255, 200, 0, 0.35)',
     paragraphNumberColor: '#d68bd0',
+    paragraphTypeColor: '#6fbf6a',
 });
 
 const HEADING_SCALE = [2.0, 1.6875, 1.4375, 1.25, 1.125, 1.0625];
@@ -81,7 +83,10 @@ export class MarkdownStyleProvider {
             maxWidth: t.documentWidth > 0 ? t.documentWidth : Infinity, placement: t.centered ? 'center' : 'left',
             background: t.background, color: t.color, selectionColor: t.selectionColor, caretColor: t.caretColor,
             highlightColor: t.highlightColor,
-            gutter: { fontFamily: t.fontFamily, fontSize: t.gutterFontSize, color: t.paragraphNumberColor },
+            gutter: {
+                fontFamily: t.fontFamily, fontSize: t.gutterFontSize, color: t.paragraphNumberColor,
+                namesColor: t.paragraphTypeColor,
+            },
         };
     }
 
@@ -98,6 +103,7 @@ export class MarkdownStyleProvider {
         const t = this.theme;
         const { kind, quotes, lists } = parseStyleId(styleId ?? 'p');
         let style = this.builtIn(kind);
+        if (kind === 'p') style.name = plainName(quotes, lists);
         if (quotes > 0 || lists > 0) {
             const quoteRoom = quotes * QUOTE_STEP;
             const listRoom = lists * t.listIndent;
@@ -290,6 +296,13 @@ function isDarkColor(color) {
     if (!match) return false;
     const [r, g, b] = match.slice(1).map((hex) => parseInt(hex, 16));
     return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+}
+
+// What a plain paragraph is called (the gutter's names show it): by what it is in, as MaxPad's. (One directly in a list
+// item is a Bullet, a List or a Check; a "Quote item" is one in a quote and a list both.)
+function plainName(quotes, lists) {
+    if (quotes > 0) return lists > 0 ? 'Quote item' : 'Quote';
+    return lists > 0 ? 'List item' : 'Paragraph';
 }
 
 const isCode = (kind) => kind.startsWith('code') || kind === 'html' || kind === 'front-matter';

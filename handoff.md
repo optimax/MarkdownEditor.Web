@@ -41,6 +41,11 @@ the gutter"): the control's left gutter with its `ParagraphNumbers`, MaxPad's Vi
 Paragraph Numbers; `showParagraphNumbers` on the editor, off by default. See the document's
 section 4.10.
 
+Paragraph types in the gutter (2026-11-03, the user: "Add paragraph types to the gutter as
+another option"): the control's `StyleNames`, MaxPad's View > Paragraph Types, left of the
+numbers; `showParagraphTypes` on the editor, off by default; in the raw view each line is
+named by the block it begins in the formatted view. See the document's sections 4.10 and 9.
+
 ## Design decisions
 
 The decisions are in `documents/implementation.md`; the ones a new session needs first:
@@ -59,7 +64,7 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Verification
 
-- `test/index.html`: 54 passed, 0 failed (Chrome, in the Claude desktop app's browser).
+- `test/index.html`: 56 passed, 0 failed (Chrome, in the Claude desktop app's browser).
   `?steps=150` ran the random test clean as well.
 - Tried by hand in the browser: typing, the syntax at the caret, Enter in a list and a
   quote, a task's box clicked, a word double-clicked and made bold from the toolbar, the
@@ -67,7 +72,8 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
   Ctrl+0 to Ctrl+6, Ctrl+= and Ctrl+-; the raw view by Ctrl+Shift+R (the page not
   reloaded), the source edited in it and made the document on leaving, one undo back, the
   dark theme in it; the paragraph numbers from the toolbar, beside headings, items, code, a
-  table and a rule, and the same in the raw view.
+  table and a rule, and the same in the raw view. The paragraph types with the numbers, in
+  both views, from the toolbar.
 - Timings are only good with the browser pane in sight: a pane out of sight runs the page as
   a background page, several times slower (2026-11-03: 112 ms a key where 22 ms had been
   measured on the same document).
@@ -80,7 +86,7 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 1. Incremental parsing (the document's section 14): the main cost of a key in a long
    document.
 2. Firefox and Safari, mobile keyboards and input methods, tried by hand.
-3. Table commands, code highlighting, find and replace; the raw view's own stylesheet and
-   line types (MaxPad's).
+3. Table commands, code highlighting, find and replace; the raw view's own stylesheet
+   (MaxPad's).
 4. Adapt `AGENTS.md`, now a copy of MarkdownTools' (WPF and .NET rules), to this project:
    the user's decision.

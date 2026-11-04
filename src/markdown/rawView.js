@@ -14,6 +14,7 @@
 // joined by "\n", each break a "\n".
 
 import { SOFT_BREAK } from '../view/text.js';
+import { MarkdownState } from './state.js';
 
 /** Where each paragraph of the raw view starts: the start of the line each projected paragraph begins on (the first 0). */
 export function rawStarts(state) {
@@ -49,6 +50,32 @@ export function toRaw(offset, starts, texts) {
 /** The source the raw view's paragraphs say: joined by "\n", every break, and any line ending pasted in, a "\n". */
 export function sourceOfRaw(texts) {
     return texts.map((text) => text.split(SOFT_BREAK).join('\n').replace(/\r\n?/g, '\n')).join('\n');
+}
+
+/**
+ * The type of each paragraph of the raw view, as the gutter's names show it (MaxPad's RawView.Kinds): the name
+ * (`nameOf(styleId)`) of the block of the formatted view its first line is in -- of a table's row, its first cell's --
+ * and '' for a line in no block (the blank line between two). A table's delimiter row on a line of its own is its header's.
+ */
+export function rawTypes(texts, nameOf) {
+    const lines = texts.map((text) => text.split(SOFT_BREAK).join('\n').replace(/\r\n?/g, '\n'));
+    const state = new MarkdownState(lines.join('\n'));
+    const blocks = state.paragraphs;
+    const types = new Array(texts.length);
+    let start = 0, next = 0;
+    for (let i = 0; i < texts.length; i++) {
+        const line = state.lineAt(start);
+        while (next < blocks.length && blocks[next].lastLine < line) next++;
+        const block = blocks[next];
+        if (block && block.firstLine <= line) types[i] = nameOf(block.styleId);
+        else if (block?.cell && blocks[next - 1]?.cell?.table === block.cell.table) {
+            types[i] = nameOf(blocks[next - 1].styleId); // (a delimiter row on its own: its header's)
+        } else {
+            types[i] = '';
+        }
+        start += lines[i].length + 1;
+    }
+    return types;
 }
 
 /** Where a place in the source the raw view's paragraphs say is in the view (the way back of `rawToSource`). */
@@ -176,8 +203,24 @@ export class RawMode {
             view.setParagraphs(texts.map((text) => ({ runs: [{ text }], styleId: 'raw' })));
             if (anchor === caret) view.setCaret(toRaw(caret, starts, texts), { scroll: false });
             else view.select(toRaw(anchor, starts, texts), toRaw(caret, starts, texts), { scroll: false });
+            view.paragraphLabels = (index) => this.typeOf(index);
         });
         this.session.loadedVersion = view.version;
+    }
+
+    /**
+     * The type of the raw view's paragraph `index`, as the formatted view names its block (`rawTypes`): read again from
+     * the view's text when it has changed since, and only when asked (the gutter asks only when it shows the names).
+     */
+    typeOf(index) {
+        const session = this.session;
+        if (!session) return null;
+        if (session.typesVersion !== this.view.version) {
+            const styles = session.styles;
+            session.types = rawTypes(this.texts(), (styleId) => styles?.getParagraphStyle?.(styleId)?.name ?? styleId);
+            session.typesVersion = this.view.version;
+        }
+        return session.types[index] ?? null;
     }
 
     // The view given back to the controller: the text it holds is the document if it was changed (one step of its
@@ -192,6 +235,7 @@ export class RawMode {
         const source = this.changed ? sourceOfRaw(texts) : this.controller.state.source;
         this.session = null;
         view.batch(() => {
+            view.paragraphLabels = null;
             view.editRecorder = null;
             view.styleProvider = session.styles;
             this.controller.resume(source, caret, anchor);
@@ -210,6 +254,7 @@ export class RawMode {
         const session = this.session;
         if (!session) return;
         this.session = null;
+        this.view.paragraphLabels = null;
         this.view.editRecorder = null;
         this.view.styleProvider = session.styles;
         this.controller.resume(this.controller.state.source, 0, 0);

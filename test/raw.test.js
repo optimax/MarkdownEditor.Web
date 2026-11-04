@@ -90,6 +90,28 @@ test('the paragraph numbers of the two views agree', () => {
     ok(editor.showParagraphNumbers, 'the gutter stays');
 });
 
+test('the paragraph types of the two views agree, and follow the source', () => {
+    const editor = makeEditor('# T\n\ntext\nmore\n\n> q\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n```\nx\n```\n\n- i\n- j',
+        { showParagraphTypes: true });
+    const typesOf = () => {
+        const view = editor.view, out = [];
+        for (let i = 0; i < view.paragraphCount; i++) {
+            if (!view.paragraphs[i].cell || view.paragraphs[i].cell.column === 0) out.push(view.getStyleName(i));
+        }
+        return out;
+    };
+    const formatted = typesOf();
+    equal(formatted, ['Heading 1', 'Paragraph', 'Quote', 'Table header', 'Table cell', 'Code fence', 'Code', 'Code fence',
+        'Bullet', 'Bullet']);
+    editor.rawMode = true;
+    equal(typesOf(), formatted, 'each line of the source has the type of the block it begins');
+    editor.select(0);
+    typeInto(editor, '#');
+    equal(editor.view.getStyleName(0), 'Heading 2', 'a line\'s type follows its text');
+    editor.rawMode = false;
+    equal(editor.view.paragraphLabels, null, 'the formatted view names its paragraphs by their styles');
+});
+
 test('formatting does nothing in the source; setting the value leaves it', () => {
     const editor = makeEditor('word', { rawMode: true });
     ok(editor.rawMode, 'started in the source');

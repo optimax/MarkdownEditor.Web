@@ -53,6 +53,8 @@ const CSS = `
 .vtv-gutter { position: absolute; top: 0; bottom: 0; box-sizing: border-box; overflow: hidden; pointer-events: none;
   user-select: none; display: none; }
 .vtv-gutter-label { position: absolute; white-space: nowrap; line-height: normal; }
+.vtv-gutter-name { position: absolute; white-space: nowrap; line-height: normal; overflow: hidden; text-overflow: ellipsis;
+  text-align: right; }
 .vtv-base { display: inline-block; width: 0; height: 0; }
 .vtv-current-line { position: absolute; left: 0; right: 0; display: none; }
 .vtv-selection, .vtv-highlight { position: absolute; }
@@ -90,11 +92,13 @@ export function keyChord(event) {
     return parts.join('+');
 }
 
-/** What a gutter shows (the WPF control's GutterContent, of which this has the paragraph numbers so far). */
-export const GutterContent = Object.freeze({ None: 0, ParagraphNumbers: 1 });
+/** What a gutter shows (the WPF control's GutterContent, flags: the numbers and the names together, the names outer). */
+export const GutterContent = Object.freeze({ None: 0, ParagraphNumbers: 1, StyleNames: 2 });
 
 const GUTTER_PADDING = 6; // (inside the gutter, either side of its numbers)
 const GUTTER_SPACING = 8; // (between the gutter and the text: the control's DefaultGutterSpacing)
+const GUTTER_COLUMN_GAP = 10; // (between the names and the numbers: the control's ColumnGap)
+const GUTTER_NAMES_WIDTH = 96; // (the names' column: the control's DefaultNamesColumnWidth; a longer name ends in ...)
 
 /** The text a run shows: a line break inside the paragraph is a line break, unless the run is hidden. */
 const shownText = (text, hidden) => (text.includes(SOFT_BREAK) ? text.replaceAll(SOFT_BREAK, hidden ? ' ' : '\n') : text);
@@ -168,6 +172,8 @@ export class VirtualTextView extends EventTarget {
         this._showFormattingMarks = !!options.showFormattingMarks;
         this._leftGutterContent = options.leftGutterContent ?? GutterContent.None;
         this._gutterLabels = [];
+        this._gutterNames = [];
+        this._paragraphLabels = options.paragraphLabels ?? null;
         this._zoom = 1;
         this._applyDocumentStyle();
         this._wireInput();
@@ -207,9 +213,10 @@ export class VirtualTextView extends EventTarget {
     }
 
     /**
-     * What the gutter left of the text shows (`GutterContent`): `ParagraphNumbers`, each paragraph's number beside its
-     * first line, or `None` (the default), when the gutter is not there and takes no room. A view setting, not the
-     * document's; how it looks is the document style's `gutter`.
+     * What the gutter left of the text shows (`GutterContent`, flags): `ParagraphNumbers`, each paragraph's number beside
+     * its first line, `StyleNames`, the name of its style (`getStyleName`), left of the numbers when both are shown, or
+     * `None` (the default), when the gutter is not there and takes no room. A view setting, not the document's; how it
+     * looks is the document style's `gutter`.
      */
     get leftGutterContent() {
         return this._leftGutterContent;
@@ -221,6 +228,21 @@ export class VirtualTextView extends EventTarget {
         this._leftGutterContent = value;
         this._applyDocumentStyle();
         this._invalidateHeights();
+    }
+
+    /**
+     * What the gutter's names (`GutterContent.StyleNames`) say of a paragraph, by its index, where the host names
+     * paragraphs itself rather than by their styles (the raw Markdown view names each line by the kind of block it is):
+     * a function of the index, whose null answer shows the style's name as ever and an empty one nothing. Null (the
+     * default) asks nothing. The control's ParagraphLabels; the gutter asks again each time it is drawn.
+     */
+    get paragraphLabels() {
+        return this._paragraphLabels;
+    }
+
+    set paragraphLabels(labels) {
+        this._paragraphLabels = labels ?? null;
+        if (this._leftGutterContent & GutterContent.StyleNames) this._afterHostChange(false);
     }
 
     get padding() {
@@ -768,13 +790,16 @@ export class VirtualTextView extends EventTarget {
 
     // ---- The gutter -----------------------------------------------------------------------------------------------
 
-    // Styles the gutter and gives its width (0 when it shows nothing): its numbers' column is as wide as the number of
-    // paragraphs has digits (two at least), with room either side, as the control's.
+    // Styles the gutter and gives its width (0 when it shows nothing), as the control's: its numbers' column is as wide
+    // as the number of paragraphs has digits (two at least), its names' column GUTTER_NAMES_WIDTH, outside the numbers,
+    // with a gap between the two and room either side.
     _styleGutter(look, left) {
         const gutter = this.gutter;
         this._gutterDigits = this._digitsOfCount();
         this._gutterBaseline = null; // (measured again when it is drawn: the font may have changed)
-        if (!this._leftGutterContent) {
+        const numbers = (this._leftGutterContent & GutterContent.ParagraphNumbers) !== 0;
+        const names = (this._leftGutterContent & GutterContent.StyleNames) !== 0;
+        if (!numbers && !names) {
             gutter.style.display = 'none';
             return 0;
         }
@@ -784,12 +809,31 @@ export class VirtualTextView extends EventTarget {
         const canvas = (VirtualTextView._measure ??= document.createElement('canvas')).getContext('2d');
         canvas.font = font;
         const border = g.borderColor ? 1 : 0;
-        const width = Math.ceil(this._gutterDigits * canvas.measureText('0').width + 2 * GUTTER_PADDING * this._zoom + border);
+        const numbersWidth = numbers ? this._gutterDigits * canvas.measureText('0').width : 0;
+        const namesWidth = names ? GUTTER_NAMES_WIDTH * this._zoom : 0;
+        const gap = numbers && names ? GUTTER_COLUMN_GAP * this._zoom : 0;
+        const width = Math.ceil(numbersWidth + gap + namesWidth + 2 * GUTTER_PADDING * this._zoom + border);
         gutter.style.cssText = `display:block;left:${left}px;width:${width}px;font:${font};color:${g.color};` +
             (g.background ? `background:${g.background};` : '') +
             (border ? `border-right:1px solid ${g.borderColor};` : '');
         this._gutterInset = GUTTER_PADDING * this._zoom + border; // (from the gutter's right edge to its numbers)
+        this._namesInset = this._gutterInset + numbersWidth + gap; // (and to its names)
+        this._namesWidth = namesWidth;
+        this._namesColor = g.namesColor ?? g.color;
         return width;
+    }
+
+    /**
+     * What the gutter's names say of paragraph `index`: the host's `paragraphLabels`, when it answers; else the style
+     * provider's `getStyleLabel(styleId)`, when it has one; else the style's `name`, or its ID when it has none.
+     */
+    getStyleName(index) {
+        const own = this._paragraphLabels?.(index);
+        if (own !== null && own !== undefined) return String(own);
+        const styleId = this.paragraphs[index]?.styleId ?? null;
+        const label = this._styleProvider?.getStyleLabel?.(styleId);
+        if (label) return label;
+        return this._paragraphStyle(styleId).style.name || (styleId ?? '');
     }
 
     _digitsOfCount() {
@@ -828,10 +872,13 @@ export class VirtualTextView extends EventTarget {
     // sight) has none, so that it writes over no neighbour's -- unless its box is drawn (a border, a background) and its
     // room, margins and all, is half as tall again as a number (a rule): its number then sits in the middle of the room.
     // (all the places are read first and the numbers written after, so that the page is laid out once, not once a number)
+    // The names go on the same lines, beside the numbers (each trimmed to its column, an empty one not drawn).
     _drawGutter() {
         const labels = this._gutterLabels;
         const numbers = [];
-        if (this._leftGutterContent & GutterContent.ParagraphNumbers) {
+        const showNumbers = (this._leftGutterContent & GutterContent.ParagraphNumbers) !== 0;
+        const showNames = (this._leftGutterContent & GutterContent.StyleNames) !== 0;
+        if (showNumbers || showNames) {
             const page = this._pageRect().top;
             if (this._gutterBaseline === null) {
                 const probe = el('div', 'vtv-gutter-label');
@@ -856,22 +903,35 @@ export class VirtualTextView extends EventTarget {
                     } else {
                         top = box._base.getBoundingClientRect().top - page - this._gutterBaseline;
                     }
-                    numbers.push({ number: this.getParagraphNumber(box._index), top });
+                    numbers.push({ index: box._index, top });
                 }
             }
         }
-        numbers.forEach(({ number, top }, k) => {
-            let label = labels[k];
+        const write = (pool, className, k, text, css) => {
+            let label = pool[k];
             if (!label) {
-                label = el('div', 'vtv-gutter-label');
+                label = el('div', className);
                 this.gutter.append(label);
-                labels.push(label);
+                pool.push(label);
             }
-            const text = String(number);
             if (label.textContent !== text) label.textContent = text;
-            label.style.cssText = `top:${top}px;right:${this._gutterInset}px;`;
-        });
-        for (let k = numbers.length; k < labels.length; k++) labels[k].style.cssText = 'display:none';
+            label.style.cssText = css;
+        };
+        const names = this._gutterNames;
+        let shownNumbers = 0, shownNames = 0;
+        for (const { index, top } of numbers) {
+            if (showNumbers) {
+                write(labels, 'vtv-gutter-label', shownNumbers++, String(this.getParagraphNumber(index)),
+                    `top:${top}px;right:${this._gutterInset}px;`);
+            }
+            const name = showNames ? this.getStyleName(index) : '';
+            if (name) {
+                write(names, 'vtv-gutter-name', shownNames++, name,
+                    `top:${top}px;right:${this._namesInset}px;width:${this._namesWidth}px;color:${this._namesColor};`);
+            }
+        }
+        for (let k = shownNumbers; k < labels.length; k++) labels[k].style.cssText = 'display:none';
+        for (let k = shownNames; k < names.length; k++) names[k].style.cssText = 'display:none';
     }
 
     // ---- Layout ---------------------------------------------------------------------------------------------------
@@ -997,7 +1057,7 @@ export class VirtualTextView extends EventTarget {
             return;
         }
         if (!this.host.isConnected) return;
-        if (this._leftGutterContent && this._digitsOfCount() !== this._gutterDigits) {
+        if (this._leftGutterContent & GutterContent.ParagraphNumbers && this._digitsOfCount() !== this._gutterDigits) {
             // (one more digit to the numbers: the gutter is wider, the text narrower, every height to measure again)
             this._applyDocumentStyle();
             this._widthCache = 0;
