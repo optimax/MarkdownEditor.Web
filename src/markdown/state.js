@@ -2,8 +2,8 @@
 // containers put at the start of a line, which lines are blank. Immutable: a command makes a new source, and a new state
 // is read from it.
 
-import { parseMarkdown } from './parser.js';
-import { project } from './projection.js';
+import { parseMarkdown, reparseMarkdown } from './parser.js';
+import { project, reproject } from './projection.js';
 
 export class MarkdownState {
     constructor(source, options = {}) {
@@ -11,7 +11,26 @@ export class MarkdownState {
         this.caret = options.caret ?? null; // (where the caret was when it was projected: a cell's padding typed shows)
         this.doc = options.doc ?? parseMarkdown(source);
         this.projection = options.projection ?? project(this.doc, { caret: options.caret });
-        this._cover = null;
+        this._cover = this.projection.cover ?? null;
+    }
+
+    /**
+     * The state of `source`, which is `old.source` with `change` made (`{ start, removed, inserted }`: where, and how many
+     * characters went and came), read again only where the change can have made a difference (`reparseMarkdown`,
+     * `reproject`), or whole when that cannot be told. `old` is not to be used afterwards: what was kept of it is the new
+     * state's. (`MarkdownState.incremental = false` reads every source whole.)
+     */
+    static edited(old, source, change, options = {}) {
+        if (MarkdownState.incremental && old && change) {
+            const reread = reparseMarkdown(old.doc, source, change);
+            if (reread) {
+                const projection = reproject(old.projection, reread.doc, reread.window, { caret: options.caret });
+                const state = new MarkdownState(source, { ...options, doc: reread.doc, projection });
+                state.window = reread.window;
+                return state;
+            }
+        }
+        return new MarkdownState(source, options);
     }
 
     get lines() {
@@ -109,6 +128,8 @@ export class MarkdownState {
         return this.source.slice(0, start) + text + this.source.slice(end);
     }
 }
+
+MarkdownState.incremental = true;
 
 /** The end of line `line` of a source (lines joined by "\n"). */
 export function lineEndOf(source, line) {

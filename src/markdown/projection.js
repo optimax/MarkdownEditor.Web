@@ -45,6 +45,91 @@ export function project(doc, options = {}) {
     return new Projector(doc, options).run();
 }
 
+/**
+ * The projection of a document read again in part (`reparseMarkdown`'s `{ doc, window }`), from the old one's: the
+ * paragraphs of the lines read again are projected, those before them kept as they are, those after them kept and moved
+ * with the change (their offsets and lines; their runs' places are their paragraph's, and their keys are of what they
+ * show, so the view sees them unchanged). A table that the caret was or is at the end of a cell of, outside the lines
+ * read again, is projected again too (spaces at the end of a cell show while the caret is after them).
+ */
+export function reproject(old, doc, window, options = {}) {
+    const { from, to, oldTo, delta, lineDelta } = window;
+    const projector = new Projector(doc, options);
+    projector.tables = old.tableCount ?? 0;
+    projector.cover = coverOf(doc);
+    const paragraphs = old.paragraphs;
+    const firstAt = (line) => {
+        let low = 0, high = paragraphs.length;
+        while (low < high) {
+            const middle = (low + high) >> 1;
+            if (paragraphs[middle].firstLine < line) low = middle + 1;
+            else high = middle;
+        }
+        return low;
+    };
+    // (a blank line the window begins with may go on a run of blank lines before it: which of them is the one that
+    // separates blocks is worked out from the run's first, so the run is projected again whole)
+    const blankLine = (line) => !projector.cover[line] && !projector.itemStartingOn(line) && projector.isBlank(line);
+    let start = from;
+    if (blankLine(start)) {
+        const quote = projector.quoteOf(start);
+        while (start > 0 && blankLine(start - 1) && projector.quoteOf(start - 1) === quote) start--;
+    }
+    const a = firstAt(start), b = firstAt(oldTo);
+    const after = paragraphs.slice(b);
+    if (delta || lineDelta) {
+        const owners = new Set();
+        for (const paragraph of after) {
+            paragraph.start += delta;
+            paragraph.end += delta;
+            paragraph.contentStart += delta;
+            paragraph.firstLine += lineDelta;
+            paragraph.lastLine += lineDelta;
+            if (paragraph.task) paragraph.task.start += delta;
+            for (const run of paragraph.runs) {
+                const owner = run.owner;
+                if (owner && (owner.kind === 'line' || owner.kind === 'rule') && !owners.has(owner)) {
+                    owners.add(owner);
+                    owner.line += lineDelta;
+                }
+            }
+        }
+    }
+    projector.runLines(start, to);
+    let out = [...paragraphs.slice(0, a), ...projector.out, ...after];
+    // (a table outside the lines read again whose projection depends on the caret: the old caret's, or the new one's)
+    const tables = new Set();
+    if (old.caretTable && !inWindow(old.caretTable, from, to)) tables.add(old.caretTable);
+    const caret = options.caret ?? -1;
+    if (caret >= 0) {
+        const leaf = projector.cover[projector.lineAt(caret)];
+        if (leaf?.type === 'table' && !inWindow(leaf, from, to)) tables.add(leaf);
+    }
+    for (const table of tables) {
+        if (!doc.leaves.includes(table)) continue;
+        const first = out.findIndex((paragraph) => paragraph.block === table);
+        if (first < 0) continue;
+        let last = first;
+        while (last + 1 < out.length && out[last + 1].block === table) last++;
+        const mark = projector.out.length;
+        projector.table(table);
+        out = [...out.slice(0, first), ...projector.out.slice(mark), ...out.slice(last + 1)];
+    }
+    projector.out = out; // (its caretTable: the table projected here, if any, that the caret is at the end of a cell of)
+    return projector.finish();
+}
+
+const inWindow = (block, from, to) => block.firstLine >= from && block.lastLine < to;
+
+// The leaf each line is in (null for a line in none).
+function coverOf(doc) {
+    const cover = new Array(doc.lines.length).fill(null);
+    for (const leaf of doc.leaves) {
+        for (let line = leaf.firstLine; line <= leaf.lastLine; line++) cover[line] ??= leaf;
+    }
+    return cover;
+}
+
 class Projector {
     constructor(doc, options) {
         this.doc = doc;
@@ -61,14 +146,26 @@ class Projector {
     }
 
     run() {
-        const { lines, doc } = this;
-        const cover = new Array(lines.length).fill(null);
-        for (const leaf of doc.leaves) {
-            for (let line = leaf.firstLine; line <= leaf.lastLine; line++) cover[line] ??= leaf;
-        }
-        this.cover = cover;
-        let i = 0;
-        while (i < lines.length) {
+        this.cover = coverOf(this.doc);
+        this.runLines(0, this.lines.length);
+        if (this.out.length === 0) this.blank(0, null);
+        return this.finish();
+    }
+
+    finish() {
+        const projection = new Projection(this.doc, this.out);
+        projection.tableCount = this.tables;
+        projection.caretTable = this.caretTable ?? null;
+        projection.cover = this.cover;
+        return projection;
+    }
+
+    // The paragraphs of lines [from, to): every leaf that begins on them, and every line in no leaf. (`to` is the end
+    // of the document, or a line a block begins on, so that a run of blank lines never goes past it.)
+    runLines(from, to) {
+        const { lines, cover } = this;
+        let i = from;
+        while (i < to) {
             const leaf = cover[i];
             if (leaf && leaf.firstLine === i) {
                 this.projectLeaf(leaf);
@@ -98,8 +195,6 @@ class Projector {
             for (let line = separated ? i + 1 : i; line <= end; line++) this.blank(line, quote);
             i = end + 1;
         }
-        if (this.out.length === 0) this.blank(0, null);
-        return new Projection(doc, this.out);
     }
 
     // ---- What a line is ------------------------------------------------------------------------------------------
@@ -335,6 +430,7 @@ class Projector {
                     if (start === end && cell.left < cell.right) start = end = cell.left + 1; // (after a space of padding)
                     if (this.caret > end && this.caret <= cell.right && !/\S/.test(this.source.slice(end, this.caret))) {
                         end = this.caret; // (spaces typed at the end of the cell's text, shown while the caret is after them)
+                        this.caretTable = leaf; // (a projection of this table holds only while the caret is there)
                     }
                 } else {
                     start = end = lineEnd; // (a cell the row does not have: empty, at the row's end)

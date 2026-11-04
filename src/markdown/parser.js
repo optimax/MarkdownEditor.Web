@@ -66,6 +66,156 @@ export function parseMarkdown(source) {
     return new BlockParser(source).parse();
 }
 
+/**
+ * The document of `source`, which is `old.source` with `change.removed` characters at `change.start` replaced by
+ * `change.inserted` characters, read again only where the change can have made a difference (2026-11-04, the user:
+ * "Implement incremental parsing to support long documents"). Returns `{ doc, window }`, or null when that cannot be
+ * told (the whole source is then to be read: `parseMarkdown`).
+ *
+ * The parse of a line depends on the lines before it only through the blocks open when it begins. So the lines are read
+ * again from the last line, at or before the change, that the old parse began with no block open and that begins a
+ * block (`from`); and up to the first line after the change that both parses begin with no block open and that begins
+ * a block (`window.to`): from there on the text is the same, and so is everything read of it. The old document's
+ * blocks before the window are kept as they are, those after it kept and moved (`shiftBlock`: their offsets by the
+ * difference in length, their lines by the difference in lines). The inlines depend on the link reference definitions
+ * of the whole document: a change that has definitions on either side of it is read whole. So is one that may make
+ * front matter (a source that begins with "---" and had none).
+ *
+ * `window`: `{ from, to }` (the lines read again, in the new document), `oldTo` (the old line `to` was), `delta`,
+ * `lineDelta`. The old document is not to be used afterwards: what was kept of it is the new one's.
+ */
+export function reparseMarkdown(old, source, change) {
+    if (!old?.fresh || !change) return null;
+    const { start, removed, inserted } = change;
+    const delta = inserted - removed;
+    if (old.source.length + delta !== source.length) return null;
+    const oldLines = old.lines, oldFresh = old.fresh;
+    const hasFrontMatter = old.root.children[0]?.type === 'front_matter';
+    if (!hasFrontMatter && /^---[ \t]*(?:\n|$)/.test(source)) return null;
+    // (the first line to read again: one the old parse began with no block open, and with something on it)
+    let from = lineIndexAt(oldLines, start);
+    const hasText = (lines, text, line) => reNonSpace.test(text.slice(lines[line].start, lines[line].end));
+    while (from > 0 && !(oldFresh[from] && hasText(oldLines, old.source, from))) from--;
+    if (from === 0 && (hasFrontMatter || !oldFresh[0])) return null;
+
+    const parser = new BlockParser(source);
+    const lines = parser.lines;
+    const lineDelta = lines.length - oldLines.length;
+    const changeEnd = start + inserted;
+    const to = parser.parseWindow(from, (i) => {
+        if (lines[i].start < changeEnd) return false; // (a line the change is in, or before it)
+        const j = i - lineDelta;
+        return j > from && j < oldLines.length && oldFresh[j] === 1 && oldLines[j].start === lines[i].start - delta &&
+            hasText(lines, source, i);
+    });
+    if (parser.definitions.size > 0) return null; // (definitions read again: every link may mean another thing)
+    const oldTo = to - lineDelta;
+    const top = old.root.children;
+    let a = 0;
+    while (a < top.length && top[a].lastLine < from) a++;
+    let b = a;
+    while (b < top.length && top[b].firstLine < oldTo) b++;
+    for (let k = a; k < b; k++) if (hasDefinitions(top[k])) return null;
+
+    // (the inlines of what was read again, with the document's definitions)
+    parser.definitions = old.definitions;
+    const windowLeaves = [];
+    parser.collectLeaves(parser.root, windowLeaves);
+    for (const leaf of windowLeaves) parser.parseInlinesOf(leaf);
+
+    // (what is kept after the window moves with the change)
+    const after = top.slice(b);
+    if (delta || lineDelta) {
+        for (const block of after) shiftBlock(block, delta, lineDelta);
+        for (let j = oldTo; j < oldLines.length; j++) {
+            for (const mark of old.lineMarks[j]) {
+                mark.start += delta;
+                mark.end += delta;
+            }
+        }
+    }
+    const root = new Block('document', null, 0);
+    root.children = [...top.slice(0, a), ...parser.root.children, ...after];
+    for (const child of root.children) child.parent = root;
+    root.lastLine = lines.length - 1;
+    root.open = false;
+    const leaves = [];
+    parser.collectLeaves(root, leaves);
+    const lineMarks = parser.lineMarks;
+    const fresh = parser.fresh;
+    for (let i = 0; i < from; i++) {
+        lineMarks[i] = old.lineMarks[i];
+        fresh[i] = oldFresh[i];
+    }
+    for (let i = to; i < lines.length; i++) {
+        lineMarks[i] = old.lineMarks[i - lineDelta];
+        fresh[i] = oldFresh[i - lineDelta];
+    }
+    const doc = { source, lines, root, leaves, definitions: old.definitions, lineMarks, fresh };
+    return { doc, window: { from, to, oldTo, delta, lineDelta } };
+}
+
+// The line an offset is on.
+function lineIndexAt(lines, offset) {
+    let low = 0, high = lines.length - 1;
+    while (low < high) {
+        const middle = (low + high + 1) >> 1;
+        if (lines[middle].start <= offset) low = middle;
+        else high = middle - 1;
+    }
+    return low;
+}
+
+// Whether a block has link reference definitions in it (a block of them, at any depth).
+function hasDefinitions(block) {
+    if (block.type === 'definitions') return true;
+    return block.children.some(hasDefinitions);
+}
+
+// A block kept after a change moves with it: every offset in it by `delta`, every line by `lines`.
+function shiftBlock(block, delta, lines) {
+    block.firstLine += lines;
+    block.lastLine += lines;
+    for (const entry of block.lines) {
+        entry.line += lines;
+        entry.contentStart += delta;
+    }
+    if (block.fenceLines) for (let k = 0; k < block.fenceLines.length; k++) block.fenceLines[k] += lines;
+    for (const key of LINE_KEYS) if (block[key] !== undefined) block[key] += lines;
+    for (const key of OFFSET_KEYS) if (block[key] !== undefined) block[key] += delta;
+    if (block.rows) {
+        for (const row of block.rows) {
+            row.line += lines;
+            row.start += delta;
+            for (const cell of row.cells) {
+                cell.left += delta;
+                cell.right += delta;
+                cell.start += delta;
+                cell.end += delta;
+                if (cell.inlines) shiftInlines(cell.inlines, delta);
+            }
+        }
+    }
+    if (block.inlines) shiftInlines(block.inlines, delta);
+    for (const child of block.children) shiftBlock(child, delta, lines);
+}
+
+// (a block's line numbers, and its offsets, besides its lines and its rows: a list's and an item's `start` is the
+// number an ordered list starts at, no offset)
+const LINE_KEYS = ['openLine', 'closeLine', 'underlineLine'];
+const OFFSET_KEYS = ['fenceStart', 'markerStart', 'markerEnd', 'prefixStart', 'contentStart', 'contentEnd'];
+
+function shiftInlines(nodes, delta) {
+    for (const node of nodes) {
+        node.start += delta;
+        node.end += delta;
+        for (const key of INLINE_OFFSET_KEYS) if (node[key] !== undefined) node[key] += delta;
+        if (node.children) shiftInlines(node.children, delta);
+    }
+}
+
+const INLINE_OFFSET_KEYS = ['contentStart', 'contentEnd', 'textStart', 'textEnd'];
+
 class BlockParser {
     constructor(source) {
         this.source = source;
@@ -88,8 +238,13 @@ class BlockParser {
         this.root = new Block('document', null, 0);
         this.root.lastLine = this.lines.length - 1;
         this.tip = this.root;
+        // (which lines the parse began with no block open: where it can begin again, reading only part of the source)
+        this.fresh = new Uint8Array(this.lines.length);
         let first = this.frontMatter();
-        for (let i = first; i < this.lines.length; i++) this.incorporateLine(i);
+        for (let i = first; i < this.lines.length; i++) {
+            this.fresh[i] = this.tip === this.root ? 1 : 0;
+            this.incorporateLine(i);
+        }
         while (this.tip) this.finalize(this.tip, this.lines.length - 1);
         this.root.open = false;
         const leaves = [];
@@ -97,8 +252,26 @@ class BlockParser {
         for (const leaf of leaves) this.parseInlinesOf(leaf);
         return {
             source: this.source, lines: this.lines, root: this.root, leaves,
-            definitions: this.definitions, lineMarks: this.lineMarks,
+            definitions: this.definitions, lineMarks: this.lineMarks, fresh: this.fresh,
         };
+    }
+
+    // Reads the lines from `from` (a line the whole parse began with no block open) as the whole parse reads them, up
+    // to the first line after it that begins with no block open and that `canStop` accepts (or the end): the blocks of
+    // those lines, in `this.root`. Their inlines are not read yet. Returns the first line not read.
+    parseWindow(from, canStop) {
+        this.root = new Block('document', null, from);
+        this.tip = this.root;
+        this.fresh = new Uint8Array(this.lines.length);
+        let i = from;
+        for (; i < this.lines.length; i++) {
+            const fresh = this.tip === this.root;
+            if (i > from && fresh && canStop(i)) break;
+            this.fresh[i] = fresh ? 1 : 0;
+            this.incorporateLine(i);
+        }
+        while (this.tip) this.finalize(this.tip, i - 1);
+        return i;
     }
 
     // YAML front matter (Markdig's extension): "---" on the first line, up to a line of "---" or "..." -- or nothing.

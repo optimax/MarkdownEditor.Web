@@ -138,7 +138,8 @@ export class MarkdownController extends EventTarget {
             throw new Error('The source is not what the step to undo was made on.');
         }
         const before = source.slice(0, step.start) + step.removed + source.slice(step.start + step.inserted.length);
-        this._setSource(before, step.before.caret, step.before.anchor);
+        this._setSource(before, step.before.caret, step.before.anchor,
+            { start: step.start, removed: step.inserted.length, inserted: step.removed.length });
     }
 
     redo() {
@@ -149,7 +150,8 @@ export class MarkdownController extends EventTarget {
             throw new Error('The source is not what the step to redo was made on.');
         }
         const after = source.slice(0, step.start) + step.inserted + source.slice(step.start + step.removed.length);
-        this._setSource(after, step.after.caret, step.after.anchor);
+        this._setSource(after, step.after.caret, step.after.anchor,
+            { start: step.start, removed: step.removed.length, inserted: step.inserted.length });
     }
 
     // ---- Commands a page calls -------------------------------------------------------------------------------------
@@ -251,14 +253,17 @@ export class MarkdownController extends EventTarget {
         this.history.record({
             ...change, kind, before: { caret: this.selection.caret, anchor: this.selection.anchor }, after: { caret, anchor },
         });
-        this._setSource(result.source, caret, anchor);
+        this._setSource(result.source, caret, anchor,
+            { start: change.start, removed: change.removed.length, inserted: change.inserted.length });
     }
 
-    _setSource(source, caret, anchor = caret) {
+    // The source changed (`change`: where, and how many characters went and came; read again only where it can have
+    // made a difference, MarkdownState.edited), and the view is given the paragraphs that differ.
+    _setSource(source, caret, anchor = caret, change = null) {
         const old = this.state;
         caret = Math.max(0, Math.min(caret, source.length));
         anchor = Math.max(0, Math.min(anchor, source.length));
-        this.state = new MarkdownState(source, { caret });
+        this.state = MarkdownState.edited(old, source, change, { caret });
         const update = changedParagraphs(old.paragraphs, this.state.paragraphs);
         this.selection = { anchor, caret };
         this.view.batch(() => {
@@ -497,10 +502,12 @@ const samePosition = (a, b) => !!a && !!b && a.paragraph === b.paragraph && a.in
 function changedParagraphs(before, after) {
     let first = 0;
     const limit = Math.min(before.length, after.length);
-    while (first < limit && before[first].key === after[first].key) first++;
+    // (a paragraph kept from the projection before is the very object: no key to compare)
+    const same = (x, y) => x === y || x.key === y.key;
+    while (first < limit && same(before[first], after[first])) first++;
     if (first === before.length && first === after.length) return null;
     let tail = 0;
-    while (tail < limit - first && before[before.length - 1 - tail].key === after[after.length - 1 - tail].key) tail++;
+    while (tail < limit - first && same(before[before.length - 1 - tail], after[after.length - 1 - tail])) tail++;
     let removeEnd = before.length - tail, insertEnd = after.length - tail;
     // (whole tables, both sides: a paragraph at `at` that is a cell of the same table as the one before it)
     const inTable = (list, at) => at > 0 && at < list.length && !!cellOf(list[at]) && cellOf(list[at - 1]) === cellOf(list[at]);

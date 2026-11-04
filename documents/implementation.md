@@ -612,6 +612,11 @@ marker as written, an item marker's room as spaces), `blankPrefix(line)` (what a
 in them is written with: the quotes' markers, trimmed), `isBlankLineOf(line, prefix)`,
 `paragraphAt`, `replaced(start, end, text)`.
 
+`MarkdownState.edited(old, source, change)` is the state of a source that is the old one
+changed (`change`: `{ start, removed, inserted }`, where and how many characters), read again
+only where the change can have made a difference (section 7.6), or whole when that cannot be
+told. (`MarkdownState.incremental = false` reads every source whole.)
+
 ### 7.2 Commands (`commands.js`)
 
 Each command is a pure function `(state, selection, ...)` where `selection` is `{ anchor,
@@ -725,6 +730,51 @@ Backspace or of Delete is one step, and what is typed over a selection goes on i
 that took it. A moved caret, an undo or a redo, Enter, a format, a paste, a page's own
 command each `seal` the last step, so that the next starts another.
 
+### 7.6 Reading again in part (`reparseMarkdown`, `reproject`)
+
+2026-11-04, the user: "Implement incremental parsing to support long documents". Reading a
+long document whole at every key cost more than everything else a key does (section 14); as
+MaxPad does, an edit now reads again only the blocks it can have changed.
+
+- **Where a parse can begin again.** The parse of a line depends on the lines before it only
+  through the blocks open when it begins (the parser keeps nothing else from line to line).
+  Every parse records which lines it began with no block open (`doc.fresh`): after a blank
+  line that closed everything (not in a list, which a blank line leaves open, nor in fenced
+  code or HTML of the kinds that go on past blank lines). From such a line, a parse with
+  nothing open reads the same blocks as the whole parse did.
+- **The window** (`reparseMarkdown(old, source, change)`): the lines are read again from the
+  last line, at or before the change, that the old parse began with no block open and that
+  has something on it (`from`): a setext underline or a line that joins a paragraph changes
+  the block before it, which begins after such a line, so it is read again too. The window
+  ends at the first line after the change that both parses begin with no block open, that
+  begins a block, and that is the same old line moved by the change (`to`, and `oldTo` in
+  the old document): from there on the text is the same and so is everything read of it. A
+  document with no such line after the change (one long list, say) is read to its end.
+- **What is kept.** The old top-level blocks before the window are the new document's as they
+  are; those after it are kept and moved with the change (`shiftBlock`: every offset by the
+  difference in length, every line by the difference in lines -- the blocks' lines, rows and
+  cells, fences, markers and content, and their inlines; a list's `start` is a number, not an
+  offset). The lines' marks after the window move too; the lines themselves are found again
+  (a scan of the source for line endings, cheap).
+- **Read whole instead** when the window had link reference definitions in it, before or
+  after the change (they change what every link in the document means), when the document
+  may get front matter (it begins with "---" and had none), when the change is in the front
+  matter, and when no line before the change can begin a parse. Then `parseMarkdown` reads it
+  all, as before.
+- **The projection** (`reproject(old, doc, window)`): the paragraphs of the window's lines are
+  projected (`runLines`), those before kept, those after kept and moved (their offsets and
+  lines, and the owners of their lines' and rules' syntax; their runs' places are their
+  paragraph's, and their keys are of what they show, so the view sees them unchanged). A
+  window that begins with a blank line in a run of blank lines before it is projected from
+  the run's first line: which of them separates two blocks and which are empty paragraphs is
+  worked out from there. A table outside the window that the caret was, or is, at the end of
+  a cell of is projected again (spaces at the end of a cell show while the caret is after
+  them: `caretTable`).
+- **The old state is used up:** what was kept of it is moved in place and is the new state's.
+  The controller keeps only the new one; the old paragraphs it compares with the new
+  (`changedParagraphs`) are the very objects where they were kept, so the comparison is
+  quick.
+
 ------
 
 ## 8. The controller: `controller.js`
@@ -737,7 +787,9 @@ command each `seal` the last step, so that the next starts another.
   in its own line ending.
 - **`apply(result, kind)`:** a command's `{ source, caret, anchor }` made the document: the
   step recorded, then `_setSource`, which reads the new source (projected with the caret, for
-  a table's padding), finds the paragraphs that changed (`changedParagraphs`: the common
+  a table's padding; only around the change, `MarkdownState.edited`, section 7.6: the change
+  is the step's, and an undo's or a redo's is its step turned back or made again), finds the
+  paragraphs that changed (`changedParagraphs`: the very objects kept, or else the common
   start and end of the old and new paragraphs by their `key`, widened to whole tables, so
   that the cells of a table are of one table object), and in one `batch` of the view hides the
   syntax it showed, replaces those paragraphs (`replaceParagraphs`), puts the selection and
@@ -1006,6 +1058,7 @@ the suites; `?steps=150` makes the random test longer.
 | Suite | What it checks |
 | --- | --- |
 | `parser.test.js` | the block structure, lists, quotes, code, HTML, tables, front matter, definitions, line marks, inlines and their offsets |
+| `incremental.test.js` | a source read again in part, after thousands of random changes (characters that make and unmake every kind of block, typed and taken away) in documents of every kind, is what a whole reading makes of it: every line, mark, block, definition and paragraph, field by field; a change reads only the blocks around it; a definition makes it read whole |
 | `projection.test.js` | blank lines, hidden and shown syntax (`⟦hidden⟧`, `⟨concealed⟩`), styles, list markers, and that every paragraph is its stretch of the source and every position maps to the source and back |
 | `commands.test.js` | each editing rule, the formats and the paragraph types, written with `¦` for the caret and `«...»` for a selection, as MaxPad.Editing.Tests write theirs |
 | `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits, the gutter's numbers (a table's row one, its room taken and given back) and names (outside the numbers, on their line, the host's first, a long one cut); the outline (a heading folding what it heads, the caret stepping over it, a heading replaced by its like staying collapsed, a caret put in a fold opening it) |
@@ -1028,12 +1081,17 @@ PowerShell (ES modules are not loaded from `file://` pages).
 
 ## 14. Costs
 
-Each edit reads and projects the whole source again; the view is then given only what
-changed, and lays out only what is in view. Typing a character took 4 ms in an 11 KB
-document, 11 ms at 50 KB and 22 ms at 167 KB (Chrome, on the development machine,
-2026-11-03): about half of it the parse and the projection, the rest finding what changed
-and laying it out. A document of 172 KB (4,500 paragraphs) loaded in 62 ms. MaxPad
-reads again only the blocks an edit touched; that is the change long documents need here.
+Each edit reads and projects again only the blocks it can have changed (section 7.6); the
+view is then given only what changed, and lays out only what is in view. In a document of
+170 KB (6,400 lines and paragraphs), typing a character took 4 to 7 ms where reading the
+whole source again took 18 to 21 ms (Chrome, on the development machine, 2026-11-04; the
+same pages, `MarkdownState.incremental` on and off). Of a key near the top, the new state
+took 1.7 ms (8.9 ms read whole; most of what is left is moving what follows the change), the
+view's layout 2 ms, the caret and its syntax 1.3 ms, and the page's `change` listeners 1.2
+ms (the demo counts the words of the whole document at every change). Loading reads it
+whole: 172 KB (4,500 paragraphs) in 62 ms. What is left that grows with the document: the
+lines found again, moving what follows the change, the cover of the lines by their leaves,
+and comparing the paragraphs by identity -- simple loops, about a millisecond at 170 KB.
 
 The gutter's numbers add the reading of each laid-out paragraph's baseline to every layout:
 about 1 to 4 ms to a scroll's layout of that document (measured in a browser pane that was
@@ -1044,7 +1102,6 @@ not of the time a key takes). Measure timings with the page in sight.
 
 ## 15. Not done, and differences from MaxPad
 
-- Incremental parsing (section 14).
 - MaxPad's outline panel, find and replace, stylesheet files (the raw view's too, section 9),
   spelling and export; code highlighting; drag and drop of text; pasting pictures; table
   commands beyond typing, Tab and Enter.

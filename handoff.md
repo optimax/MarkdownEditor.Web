@@ -47,6 +47,12 @@ user's answers there): classes `mde-content-...` of a default stylesheet in the 
 custom properties and `mde-dark`. The view still takes style objects (TinyPad). See the
 document's sections 4.2 and 10.
 
+Incremental parsing (2026-11-04, the user: "Implement incremental parsing to support long
+documents"): an edit reads again only the blocks it can have changed, and projects only
+their paragraphs (`MarkdownState.edited`, `reparseMarkdown`, `reproject`); about 3 to 4
+times faster a key at 170 KB. `test/incremental.test.js` compares it with a whole reading
+after every random change. See the document's sections 7.6 and 14.
+
 Paragraph folding (2026-11-03, TO-DO "Paragraph Folding"): the control's outline, MaxPad's
 outline marks (`showOutline`, on by default) and Collapse All and Expand All; see the
 document's section 4.11.
@@ -74,7 +80,7 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Verification
 
-- `test/index.html`: 63 passed, 0 failed (Chrome, in the Claude desktop app's browser).
+- `test/index.html`: 65 passed, 0 failed (Chrome, in the Claude desktop app's browser).
   `?steps=150` ran the random test clean as well.
 - Tried by hand in the browser: typing, the syntax at the caret, Enter in a list and a
   quote, a task's box clicked, a word double-clicked and made bold from the toolbar, the
@@ -93,10 +99,8 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Next steps
 
-1. Incremental parsing (the document's section 14): the main cost of a key in a long
-   document.
-2. Firefox and Safari, mobile keyboards and input methods, tried by hand.
-3. Table commands, code highlighting, find and replace; the raw view's own stylesheet
+1. Firefox and Safari, mobile keyboards and input methods, tried by hand.
+2. Table commands, code highlighting, find and replace; the raw view's own stylesheet
    (MaxPad's).
-4. Adapt `AGENTS.md`, now a copy of MarkdownTools' (WPF and .NET rules), to this project:
+3. Adapt `AGENTS.md`, now a copy of MarkdownTools' (WPF and .NET rules), to this project:
    the user's decision.

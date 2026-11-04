@@ -235,10 +235,6 @@ clipboard.
 
 ## Not done yet
 
-- **Incremental parsing.** Each edit reads the whole document again. Typing a character took
-  4 ms in an 11 KB document, 11 ms at 50 KB and 22 ms at 167 KB (Chrome, on the development
-  machine, 2026-11-03). MaxPad reads again only the blocks an edit touched, which is what
-  very long documents need here.
 - MaxPad's features beyond the editor itself: the outline, find and replace, the stylesheet
   files, spelling, export.
 - Code highlighting by language, drag and drop of text, and pasting pictures.
