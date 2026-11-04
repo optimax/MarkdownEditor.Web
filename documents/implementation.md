@@ -155,9 +155,9 @@ A style provider is an object with any of `getParagraphStyle(id)`,
   `cellClassName` for its cells; or `margin`, `css` and `cellCss`) are the same.
 - **Document style:** `className` (classes the view's host element gets: what a stylesheet's
   rules for the content are under), `variables` (custom properties set on it), `maxWidth`
-  and `placement` (the text held to a width, centered or not;
-  the scroll bar stays at the edge), background, color, the colors of the selection, the
-  caret and the highlights, `currentLineColor`: a band behind the caret's line (none by
+  and `placement` (the text held to a width, centered or not; the scroll bar stays at the
+  edge) or, instead, `pageClassName` (below), background, color, the colors of the
+  selection, the caret and the highlights, `currentLineColor`: a band behind the caret's line (none by
   default; the raw Markdown view has one, as MaxPad's), and `gutter`: how the gutter's
   numbers and names look (font, size, bold, `color`, and the names' `namesColor`) and the
   gutter itself (a background, and a line between it and the text) (section 4.10).
@@ -873,9 +873,19 @@ code font, on a light background; quotes in a quiet color.
   `DARK_THEME` hold them all (fonts, size, colors, `documentWidth`, `centered`, `listIndent`,
   `paragraphSpacing`, `headingLines`...). The values a page gives are custom properties on the
   content (`--mde-heading-color`; sizes in px, scaled by the zoom), which a page's stylesheet
-  may set as well; the width, the centering and the gutter's font size are the view's. The
-  colors the view draws itself (the background, the selection, the caret, the highlights,
-  the current line, the gutter's labels) are `var(--mde-...)`.
+  may set as well; only the gutter's font size is the view's. The colors the view draws
+  itself (the background, the selection, the caret, the highlights, the current line, the
+  gutter's labels) are `var(--mde-...)`.
+- **Where the document goes** (2026-11-03, TO-DO "Editor Document Alignment"): the page, the
+  text's column, is `mde-content-page` (the document style's `pageClassName`), and its width
+  and place are the stylesheet's: `max-width: calc(var(--mde-document-width) +
+  var(--vtv-page-inset))` (860 px at 100%, in `--mde-em`; the view gives the room around the
+  text, its padding and the gutter, as `--vtv-page-inset`) and `margin:
+  var(--mde-document-margin, 0 auto)`, centered. A page's rule moves it
+  (`.mde-content-page { margin: 0 }` puts it at the left); the theme's `documentWidth` (0 for
+  no limit) and `centered` set those custom properties. The view then sets no width or
+  margin of its own on the page (its base CSS has no margin either, which would win over the
+  layer).
 - **The gutter's numbers** are in the body's font at `gutterFontSize` (12) and in
   `paragraphNumberColor`, MaxPad's magenta (#AB2899; a lighter one in the dark theme); its
   **names** in `paragraphTypeColor`, MaxPad's green (#137A10; a lighter one in the dark

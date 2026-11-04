@@ -74,7 +74,7 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Verification
 
-- `test/index.html`: 62 passed, 0 failed (Chrome, in the Claude desktop app's browser).
+- `test/index.html`: 63 passed, 0 failed (Chrome, in the Claude desktop app's browser).
   `?steps=150` ran the random test clean as well.
 - Tried by hand in the browser: typing, the syntax at the caret, Enter in a list and a
   quote, a task's box clicked, a word double-clicked and made bold from the toolbar, the

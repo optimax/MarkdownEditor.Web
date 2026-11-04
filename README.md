@@ -170,7 +170,12 @@ text (section 10 of `documents/implementation.md` lists every class).
 .mde-content-h1 { font-size: 2.4em; color: #8b0000; }
 .mde-content { --mde-link-color: #2e7d32; }
 .mde-content-code { border: 1px solid #ccc; }
+.mde-content-page { margin: 0; }  /* the document at the left */
+.mde-content { --mde-document-width: 40em; }
 ```
+
+The document is centered in the editor and at most 860 px wide (at 100%): the page,
+`.mde-content-page`, has `margin: 0 auto` and its `max-width` from `--mde-document-width`.
 
 ## Keys
 

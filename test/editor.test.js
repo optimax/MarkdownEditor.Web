@@ -223,6 +223,41 @@ test('the outline in a Markdown document: a heading edited stays collapsed', asy
     ok(!view.isFolded(1));
 });
 
+test('where the document goes is the stylesheet\'s: centered, or as a page\'s rule says', async () => {
+    const stage = document.getElementById('stage');
+    stage.replaceChildren();
+    stage.style.width = '1400px';
+    try {
+        const editor = new MarkdownEditor(stage, { markdown: 'text', toolbar: false });
+        const view = editor.view;
+        const room = () => {
+            const page = view.page.getBoundingClientRect(), host = view.host.getBoundingClientRect();
+            return [Math.round(page.left - host.left), Math.round(host.right - page.right)];
+        };
+        ok(view.page.classList.contains('mde-content-page') && !view.page.style.margin, 'the page has its class, no margin');
+        const [left, right] = room();
+        ok(left > 100 && Math.abs(left - right) <= 20, 'centered by the default stylesheet');
+        const width = view.content.getBoundingClientRect().width;
+        ok(Math.abs(width - 860) < 1, 'the text 860 px wide at most');
+        const page = document.createElement('style');
+        page.textContent = '.mde-content-page { margin: 0; }';
+        document.head.append(page);
+        try {
+            view.invalidateStyles();
+            await tick();
+            equal(room()[0], 0, 'a page\'s rule puts it at the left');
+        } finally {
+            page.remove();
+        }
+        editor.theme = { centered: false, documentWidth: 600 };
+        await tick();
+        equal(room()[0], 0, 'and so does a theme that is not centered');
+        ok(Math.abs(view.content.getBoundingClientRect().width - 600) < 1, 'its width the theme\'s');
+    } finally {
+        stage.style.width = '';
+    }
+});
+
 test('the zoom in the toolbar: smaller, larger, and back to 100%', () => {
     const stage = document.getElementById('stage');
     stage.replaceChildren();

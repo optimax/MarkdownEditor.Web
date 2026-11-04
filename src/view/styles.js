@@ -11,7 +11,9 @@
 // CharacterStyle: { fontFamily, fontSize, bold, italic, color, background, underline, strikethrough,
 //   script ('sub' | 'super'), hidden, css, className (classes of the host's stylesheet, beside the rest) }
 // DocumentStyle: { className (classes the view's host element gets: what the stylesheet's rules for the content are
-//   under), variables (CSS custom properties set on it, { '--name': value }), maxWidth, placement ('left' | 'center'),
+//   under), variables (CSS custom properties set on it, { '--name': value }), pageClassName (classes of the page, the
+//   text's column: its max-width and margin are then the stylesheet's, which --vtv-page-inset, the room around the text,
+//   helps with), maxWidth, placement ('left' | 'center'; both without a pageClassName),
 //   background, color, selectionColor, caretColor,
 //   highlightColor, currentLineColor (a band behind the caret's line; none by default), gutter: { fontFamily,
 //   fontSize, bold, color (the numbers'), namesColor (the style names'; the numbers' color by default), background,

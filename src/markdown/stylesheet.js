@@ -52,6 +52,7 @@ export const MARKDOWN_CSS = `
   --mde-quote-step: calc(0.875 * var(--mde-em));
   --mde-quote-bar: calc(0.1875 * var(--mde-em));
   --mde-list-indent: calc(1.75 * var(--mde-em));
+  --mde-document-width: calc(53.75 * var(--mde-em));
   font-family: var(--mde-font-family);
   font-size: var(--mde-em);
   color: var(--mde-color);
@@ -78,6 +79,11 @@ export const MARKDOWN_CSS = `
   --mde-paragraph-number-color: #d68bd0;
   --mde-paragraph-type-color: #6fbf6a;
 }
+
+/* The page: the text's column, as wide as the document may be (the room around the text, padding and gutter, added:
+   --vtv-page-inset) and centered. A page's own rule moves it: .mde-content-page { margin: 0; } puts it at the left. */
+.mde-content-page { max-width: calc(var(--mde-document-width) + var(--vtv-page-inset, 0px));
+  margin: var(--mde-document-margin, 0 auto); }
 
 /* Paragraphs: every one is .mde-content-para, and of its kind; in quotes and lists, of their depth too. */
 .mde-content-para {

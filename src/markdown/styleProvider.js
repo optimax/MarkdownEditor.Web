@@ -9,8 +9,8 @@
 // tableHeaderBackground, selectionColor, caretColor, highlightColor, currentLineColor, documentWidth, centered,
 // listIndent, paragraphSpacing, headingLines, paragraphNumberColor, paragraphTypeColor, gutterFontSize }. The dark
 // one is the stylesheet's class `mde-dark`; the values a page gives are the stylesheet's custom properties
-// (`--mde-heading-color`, ...) on the content, except for the width, the centering and the gutter's font size, which
-// the view is given.
+// (`--mde-heading-color`, ...) on the content (the width and the centering too: `--mde-document-width`,
+// `--mde-document-margin`, the page's), except for the gutter's font size, which the view is given.
 
 import { parseStyleId } from './projection.js';
 import { injectMarkdownStylesheet, STYLE_DEPTH_LIMIT } from './stylesheet.js';
@@ -128,6 +128,7 @@ export class MarkdownStyleProvider {
         const t = this.theme;
         return {
             className: this.dark ? 'mde-content mde-dark' : 'mde-content',
+            pageClassName: 'mde-content-page', // (its width and where it goes are the stylesheet's)
             variables: themeVariables(this.overrides),
             maxWidth: t.documentWidth > 0 ? t.documentWidth : Infinity, placement: t.centered ? 'center' : 'left',
             background: 'var(--mde-background)', color: 'var(--mde-color)', selectionColor: 'var(--mde-selection-color)',
@@ -212,6 +213,10 @@ function themeVariables(values) {
         else if (key === 'fontSize') variables['--mde-font-size'] = `${value}px`;
         else if (key === 'listIndent' || key === 'paragraphSpacing') {
             variables['--mde-' + kebab(key)] = `calc(${value}px * var(--mde-zoom))`;
+        } else if (key === 'documentWidth') {
+            variables['--mde-document-width'] = value > 0 ? `calc(${value}px * var(--mde-zoom))` : 'none';
+        } else if (key === 'centered') {
+            variables['--mde-document-margin'] = value ? '0 auto' : '0';
         } else if (key === 'headingLines' && Array.isArray(value)) {
             value.forEach((width, i) => (variables[`--mde-h${i + 1}-line`] = `calc(${width}px * var(--mde-zoom))`));
         }

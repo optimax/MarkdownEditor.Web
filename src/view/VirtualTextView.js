@@ -32,7 +32,7 @@ const BREAKS = /(\u2028)/; // (a run cut at its line breaks, each break kept as 
 const CSS = `
 .vtv { position: relative; overflow: hidden; min-height: 120px; outline: none; cursor: text; }
 .vtv-scroller { position: absolute; inset: 0; overflow: auto; overflow-anchor: none; }
-.vtv-page { position: relative; box-sizing: border-box; margin: 0; }
+.vtv-page { position: relative; box-sizing: border-box; }
 .vtv-content { position: absolute; left: 0; right: 0; }
 .vtv-para { display: flow-root; box-sizing: border-box; }
 .vtv-box { position: relative; white-space: pre-wrap; overflow-wrap: break-word; tab-size: 4; box-sizing: border-box;
@@ -851,9 +851,23 @@ export class VirtualTextView extends EventTarget {
         this.content.style.right = right + 'px';
         this._padTop = top;
         this._padBottom = bottom;
-        const maxWidth = Number.isFinite(style.maxWidth) ? style.maxWidth * this._zoom + left + right + room : null;
-        this.page.style.maxWidth = maxWidth ? maxWidth + 'px' : '';
-        this.page.style.margin = style.placement === 'center' ? '0 auto' : '0';
+        // (the page: as wide as the text may be and where it goes -- the document style's maxWidth and placement, or,
+        // with a page class, the stylesheet's max-width and margin, which are given the room around the text, padding and
+        // gutter, as --vtv-page-inset: 2026-11-03, TO-DO "Editor Document Alignment")
+        const pageClasses = typeof style.pageClassName === 'string' ? style.pageClassName.split(/\s+/).filter(Boolean) : [];
+        for (const name of this._pageClasses ?? []) if (!pageClasses.includes(name)) this.page.classList.remove(name);
+        this.page.classList.add(...pageClasses);
+        this._pageClasses = pageClasses;
+        if (pageClasses.length) {
+            this.page.style.maxWidth = '';
+            this.page.style.margin = '';
+            this.page.style.setProperty('--vtv-page-inset', left + right + room + 'px');
+        } else {
+            const maxWidth = Number.isFinite(style.maxWidth) ? style.maxWidth * this._zoom + left + right + room : null;
+            this.page.style.maxWidth = maxWidth ? maxWidth + 'px' : '';
+            this.page.style.margin = style.placement === 'center' ? '0 auto' : '0';
+            this.page.style.removeProperty('--vtv-page-inset');
+        }
         this.host.style.background = style.background;
         this.host.style.color = style.color;
         this.caretElement.style.background = style.caretColor;
