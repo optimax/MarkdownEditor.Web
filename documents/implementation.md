@@ -438,6 +438,12 @@ Collapse All and Expand All; 2026-11-03, TO-DO "Paragraph Folding").
 - **The Markdown look** gives the headings their level (`outlineLevel` 1 to 6). The raw view's
   lines have none, and a new document (the raw view's, or the one it gives back) has nothing
   collapsed.
+- **The page's to offer** (2026-11-04, the user: "Make the collapsibility of headings
+  optional, so that the host can decide if they offer this option"): the editor's
+  `showOutline` is off by default (MaxPad's are on), and the default toolbar has no button for
+  it; a page turns it on, offers the toolbar's `'outline'` item by name, or a button of its
+  own (the demo's). Turned off, every collapsed heading is expanded (no fold is left with no
+  mark to open it), and the editor's `collapseAll()` does nothing.
 
 ------
 
@@ -964,8 +970,8 @@ provider from the theme and the controller from the Markdown. Options: `markdown
 `revealSyntax`, `revealUnfocused`, `showFormattingMarks`, `imageBase`, `openLinks`,
 `prompt`, `padding`, `label`, `onChange`, `rawMode` (start in the raw Markdown view),
 `showParagraphNumbers` (the gutter's numbers, section 4.10; off by default),
-`showParagraphTypes` (the gutter's names; off by default), `showOutline` (the outline marks,
-section 4.11; on by default, as MaxPad's).
+`showParagraphTypes` (the gutter's names; off by default), `showOutline` (collapsible
+headings: the outline marks, section 4.11; off by default, the page's to offer).
 
 - **The keys** are bound in the view's `keymap`, as MaxPad's where a browser leaves them to a
   page:
@@ -1000,9 +1006,10 @@ section 4.11; on by default, as MaxPad's).
   the caret in the editor), and a list of paragraph and heading levels. After every change
   and every move of the caret it shows which formats are on, the paragraph's type, and
   whether undo and redo can be done. Its last buttons switch the view: the paragraph marks,
-  the paragraph numbers, the paragraph types, the outline marks and the raw Markdown view,
-  which are on in a read-only document too; while the raw view is on, only undo, redo and
-  those five are on.
+  the paragraph numbers, the paragraph types and the raw Markdown view, which are on in a
+  read-only document too; while the raw view is on, only undo, redo and those are on. (The
+  outline marks' item, `'outline'`, is such a switch too, but not in `DEFAULT_TOOLBAR`: a page
+  offers it by name, or with a button of its own, as the demo does.)
 - **The page's own buttons** (2026-11-03, the user: custom buttons with SVG glyphs that look
   like the editor's, and the page choosing which of the editor's show): an item of the
   toolbar's list may be an object, `{ name, title, icon, label, onClick, pressed, enabled,
@@ -1041,7 +1048,7 @@ section 4.11; on by default, as MaxPad's).
   `src` loads a file, and makes the file's folder where its pictures are loaded from.
 - **Attributes:** `theme`, `toolbar` (`"false"` for none, or the names of the items wanted,
   separated by spaces or commas: `"undo redo | strong em"`), `readonly`, `image-base`, `src`,
-  `name`, `paragraph-numbers`, `paragraph-types`, `outline` (`"false"`: no outline marks).
+  `name`, `paragraph-numbers`, `paragraph-types`, `outline` (collapsible headings).
 - **A form field:** it is form-associated (`ElementInternals`): a form submits its Markdown
   under its `name`, and it raises `input` and `change` (bubbling) after each change, and
   `linkclick`.

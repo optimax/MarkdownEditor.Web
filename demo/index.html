@@ -31,8 +31,13 @@
 <script type="module">
   import { MarkdownEditor, DEFAULT_TOOLBAR } from '../src/index.js';
 
-  // The page's own buttons in the editor's toolbar, after the editor's: the dark theme and read-only, each a switch.
-  // (The raw Markdown view is the editor's own last button, and Ctrl+Shift+R.)
+  // The page's own buttons in the editor's toolbar, after the editor's: collapsible headings, the dark theme and
+  // read-only, each a switch. (The raw Markdown view is the editor's own button, and Ctrl+Shift+R.)
+  const outlineButton = {
+    name: 'outline', title: 'Collapsible headings', pressed: (editor) => editor.showOutline,
+    icon: '<path d="m4 6 3 3 3-3"/><path d="M13 7h7"/><path d="m5 14 3 3-3 3"/><path d="M13 17h7"/>',
+    onClick: (editor) => (editor.showOutline = !editor.showOutline),
+  };
   let dark = false;
   const darkButton = {
     name: 'dark', title: 'Dark theme', pressed: () => dark,
@@ -53,7 +58,7 @@
   const sample = await fetch('sample.md').then((response) => response.text());
   const editor = new MarkdownEditor('#editor', {
     markdown: sample, imageBase: new URL('./', location.href).href,
-    toolbar: [...DEFAULT_TOOLBAR, '|', darkButton, readOnlyButton],
+    toolbar: [...DEFAULT_TOOLBAR, '|', outlineButton, darkButton, readOnlyButton],
   });
   window.editor = editor;
   editor.focus();

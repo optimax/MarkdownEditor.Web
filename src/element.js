@@ -12,7 +12,7 @@
 // the items wanted, in order, separated by spaces or commas: "undo redo | strong em"), `readonly`,
 // `name` (the field's name in a form: the element is a form field whose value is the Markdown), `image-base`,
 // `paragraph-numbers` (each paragraph's number in a gutter), `paragraph-types` (each paragraph's type there),
-// `outline` ("false": no marks beside the headings that fold what they head).
+// `outline` (headings that can be collapsed: marks beside them that fold what they head).
 // Properties: `value`, `editor` (the MarkdownEditor). Events: 'change' (and 'input', for forms), 'linkclick'.
 
 import { MarkdownEditor } from './MarkdownEditor.js';
@@ -60,7 +60,7 @@ export class MarkdownEditorElement extends HTMLElement {
             imageBase: this.getAttribute('image-base') ?? undefined,
             showParagraphNumbers: this.hasAttribute('paragraph-numbers'),
             showParagraphTypes: this.hasAttribute('paragraph-types'),
-            showOutline: this.getAttribute('outline') !== 'false',
+            showOutline: this.hasAttribute('outline'),
         });
         this.editor.addEventListener('change', () => {
             this._internals?.setFormValue(this.editor.value);
@@ -84,7 +84,7 @@ export class MarkdownEditorElement extends HTMLElement {
         else if (name === 'paragraph-numbers') this.editor.showParagraphNumbers = value !== null;
         else if (name === 'paragraph-types') this.editor.showParagraphTypes = value !== null;
         else if (name === 'toolbar') this.editor.toolbarItems = toolbarOf(value);
-        else if (name === 'outline') this.editor.showOutline = value !== 'false';
+        else if (name === 'outline') this.editor.showOutline = value !== null;
     }
 
     async _load(url) {

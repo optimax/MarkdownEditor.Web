@@ -80,7 +80,8 @@ const ICONS = {
 /** The toolbar's items, in order ('|' a separator): what `toolbar: true` shows. */
 export const DEFAULT_TOOLBAR = ['undo', 'redo', '|', 'block', '|', 'strong', 'em', 'underline', 'strike', 'code', '|',
     'quote', 'bullet', 'number', 'task', 'codeblock', '|', 'link', 'image', 'table', 'rule', '|', 'marks', 'numbers',
-    'types', 'outline', 'raw', '|', 'zoomout', 'zoom', 'zoomin'];
+    'types', 'raw', '|', 'zoomout', 'zoom', 'zoomin'];
+// (the toolbar's 'outline' item, collapsible headings on or off, is not in it: a page offers it if it wants to)
 
 // (what the raw Markdown view leaves on: the rest of the toolbar formats, which the source shown as it is has none of)
 const RAW_ITEMS = new Set(['undo', 'redo', 'marks', 'numbers', 'types', 'outline', 'raw', 'zoomout', 'zoom', 'zoomin']);
@@ -115,7 +116,8 @@ export class MarkdownEditor extends EventTarget {
      *   by default), prompt (an async function (question, value) asking the user for a link's or a picture's
      *   address; window.prompt by default), rawMode (start in the raw Markdown view), showParagraphNumbers (each
      *   paragraph's number in a gutter left of the text), showParagraphTypes (each paragraph's type there),
-     *   showOutline (the marks beside the headings there that fold what they head; true by default) }
+     *   showOutline (headings that can be collapsed: the marks beside them there that fold what they head; false by
+     *   default, the page's to offer) }
      */
     constructor(target, options = {}) {
         super();
@@ -137,7 +139,7 @@ export class MarkdownEditor extends EventTarget {
             showFormattingMarks: this.options.showFormattingMarks, label: this.options.label ?? 'Markdown editor',
             leftGutterContent: (this.options.showParagraphNumbers ? GutterContent.ParagraphNumbers : GutterContent.None) |
                 (this.options.showParagraphTypes ? GutterContent.StyleNames : GutterContent.None) |
-                (this.options.showOutline !== false ? GutterContent.Outline : GutterContent.None),
+                (this.options.showOutline === true ? GutterContent.Outline : GutterContent.None),
             padding: this.options.padding ?? [16, 24, 24, 24],
         });
         if (this.options.imageBase) this.imageBase = this.options.imageBase;
@@ -313,21 +315,24 @@ export class MarkdownEditor extends EventTarget {
     }
 
     /**
-     * The outline marks in the gutter (MaxPad's View > Outline Marks): beside each heading with something under it, a
-     * triangle that collapses what it heads, down to the next heading of its level or a higher one, and expands it again.
-     * On by default. Turning them off leaves what is collapsed as it is (`expandAll` shows everything).
+     * Whether headings can be collapsed: the outline marks in the gutter (MaxPad's View > Outline Marks), beside each
+     * heading with something under it, a triangle that collapses what it heads, down to the next heading of its level or
+     * a higher one, and expands it again. Off by default: the page decides whether it offers this (2026-11-04, the user;
+     * the toolbar's 'outline' item, which the default toolbar leaves out, or a button of its own). Turning it off
+     * expands every collapsed heading, so that nothing stays folded with no mark to open it.
      */
     get showOutline() {
         return (this.view.leftGutterContent & GutterContent.Outline) !== 0;
     }
 
     set showOutline(on) {
+        if (!on) this.view.expandAll();
         this._showInGutter(GutterContent.Outline, on);
     }
 
-    /** Collapses every heading that has something under it (MaxPad's Collapse All). */
+    /** Collapses every heading that has something under it (MaxPad's Collapse All); nothing while `showOutline` is off. */
     collapseAll() {
-        this.view.collapseAll();
+        if (this.showOutline) this.view.collapseAll();
     }
 
     /** Expands every collapsed heading: the whole document shows (MaxPad's Expand All). */

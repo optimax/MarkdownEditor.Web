@@ -2,7 +2,7 @@
 // command the check MaxPad.Editing.Tests make: the view is what the source says (each paragraph's text and style), and
 // only the caret's paragraph shows its syntax.
 import { test, equal, ok } from './harness.js';
-import { MarkdownEditor } from '../src/index.js';
+import { MarkdownEditor, DEFAULT_TOOLBAR } from '../src/index.js';
 import { MarkdownState } from '../src/markdown/state.js';
 import { viewRunsOf } from '../src/markdown/projection.js';
 
@@ -209,7 +209,10 @@ test('the outline in a Markdown document: a heading edited stays collapsed', asy
     stage.replaceChildren();
     const editor = new MarkdownEditor(stage, { markdown: '# A\n\ntext\n\n## B\n\nmore\n\n# C', toolbar: false });
     const view = editor.view;
-    ok(editor.showOutline, 'the marks are on by default, as MaxPad\'s');
+    ok(!editor.showOutline, 'off by default: the page offers it if it wants to');
+    editor.collapseAll();
+    ok(!view.isFolded(1), 'nothing folds while it is off');
+    editor.showOutline = true;
     view.setCollapsed(0, true);
     equal(view.paragraphs.map((_, i) => view.isFolded(i)), [false, true, true, true, false]);
     editor.select(3);
@@ -219,8 +222,9 @@ test('the outline in a Markdown document: a heading edited stays collapsed', asy
     editor.undo();
     await tick();
     equal([editor.value.startsWith('# A\n'), view.isCollapsed(0), view.isFolded(3)], [true, true, true], 'and undone');
-    editor.expandAll();
-    ok(!view.isFolded(1));
+    editor.showOutline = false;
+    ok(!view.isFolded(1) && !view.isFolded(3), 'turned off, everything shows: no fold is left with no mark to open it');
+    ok(!DEFAULT_TOOLBAR.includes('outline'), 'the default toolbar does not offer it');
 });
 
 test('where the document goes is the stylesheet\'s: centered, or as a page\'s rule says', async () => {

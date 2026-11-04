@@ -54,8 +54,8 @@ times faster a key at 170 KB. `test/incremental.test.js` compares it with a whol
 after every random change. See the document's sections 7.6 and 14.
 
 Paragraph folding (2026-11-03, TO-DO "Paragraph Folding"): the control's outline, MaxPad's
-outline marks (`showOutline`, on by default) and Collapse All and Expand All; see the
-document's section 4.11.
+outline marks (`showOutline`) and Collapse All and Expand All; off by default, the host's to
+offer (2026-11-04; the demo with a button of its own). See the document's section 4.11.
 
 Paragraph types in the gutter (2026-11-03, the user: "Add paragraph types to the gutter as
 another option"): the control's `StyleNames`, MaxPad's View > Paragraph Types, left of the

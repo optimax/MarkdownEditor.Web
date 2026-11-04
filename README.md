@@ -87,7 +87,7 @@ of one). The options, all optional:
 | `rawMode` | Start in the raw Markdown view (below). |
 | `showParagraphNumbers` | Each paragraph's number in a gutter left of the text. |
 | `showParagraphTypes` | Each paragraph's type (Heading 1, Bullet, Code...) in the gutter. |
-| `showOutline` | Triangles beside the headings that fold what they head (on by default). |
+| `showOutline` | Collapsible headings: triangles beside them fold what they head (off). |
 
 What a page reads and calls:
 
@@ -110,7 +110,8 @@ What a page reads and calls:
 | `rawMode`, `toggleRawMode()` | The raw Markdown view on or off (below). |
 | `showParagraphNumbers` | The gutter's paragraph numbers on or off (the toolbar's # button). |
 | `showParagraphTypes` | The gutter's paragraph types on or off (the toolbar's button beside #). |
-| `showOutline` | The outline marks on or off; `collapseAll()`, `expandAll()` fold or open all. |
+| `showOutline` | Collapsible headings on or off (yours to offer: the default toolbar has no button). |
+| `collapseAll()`, `expandAll()` | Fold every heading, or open them all. |
 | `paragraphNumber` | The caret's paragraph's number, as the gutter shows it: for a status bar. |
 | `theme`, `zoom` | Change the look, or the scale, at any time. |
 | `zoomIn()`, `zoomOut()` | 10% larger or smaller (the toolbar's + and -); `resetZoom()`: 100%. |
