@@ -49,7 +49,8 @@ const CSS = `
 .vtv-table-wrap { display: flow-root; }
 .vtv-table { border-collapse: collapse; }
 .vtv-table td { vertical-align: top; padding: 0; }
-.vtv-overlay { position: absolute; inset: 0; pointer-events: none; }
+.vtv-overlay, .vtv-underlay { position: absolute; inset: 0; pointer-events: none; }
+.vtv-current-line { position: absolute; left: 0; right: 0; display: none; }
 .vtv-selection, .vtv-highlight { position: absolute; }
 .vtv-caret { position: absolute; width: 2px; margin-left: -1px; }
 .vtv-caret.vtv-blink { animation: vtv-blink 1.06s steps(1) infinite; }
@@ -103,6 +104,9 @@ export class VirtualTextView extends EventTarget {
         this.page = el('div', 'vtv-page');
         this.content = el('div', 'vtv-content');
         this.overlay = el('div', 'vtv-overlay');
+        this.underlay = el('div', 'vtv-underlay'); // (under the text: the band behind the caret's line)
+        this.currentLine = el('div', 'vtv-current-line');
+        this.underlay.append(this.currentLine);
         this.caretElement = el('div', 'vtv-caret');
         this.composition = el('div', 'vtv-composition');
         this.input = document.createElement('textarea');
@@ -112,7 +116,7 @@ export class VirtualTextView extends EventTarget {
         this.input.setAttribute('spellcheck', 'false');
         this.input.setAttribute('aria-label', options.label ?? 'Text editor');
         this.input.tabIndex = host.tabIndex >= 0 ? host.tabIndex : 0;
-        this.page.append(this.content, this.overlay);
+        this.page.append(this.underlay, this.content, this.overlay);
         this.overlay.append(this.caretElement, this.composition);
         this.page.append(this.input);
         this.scroller.append(this.page);
@@ -440,6 +444,34 @@ export class VirtualTextView extends EventTarget {
     /** Scrolls so that the line of `position` is in the middle of the view. */
     scrollToMiddle(position) {
         this._scrollToPosition(this._clamp(position), 'middle');
+    }
+
+    /** How far the top of the line of `position` is from the top of what can be seen; null when it is out of sight. */
+    lineTopInView(position) {
+        const rect = this.getCaretRect(position);
+        if (!rect) return null;
+        const top = rect.top - this.scroller.getBoundingClientRect().top;
+        return top >= 0 && top + rect.height <= this.scroller.clientHeight ? top : null;
+    }
+
+    /**
+     * Scrolls so that the top of the line of `position` is `top` from the top of what can be seen, as far as the document
+     * reaches either way: after a switch of views, the caret's line where the eye left it (MaxPad's ScrollToLineAt). A
+     * paragraph not laid out yet has an estimated height, which laying it out puts right, so it takes a few rounds.
+     */
+    scrollToLineAt(position, top) {
+        const p = this._clamp(position);
+        this._scrollToPosition(p, 'nearest');
+        for (let round = 0; round < 6; round++) {
+            const rect = this._caretRect(p);
+            if (!rect) break;
+            const most = Math.max(0, this.scroller.scrollHeight - this.scroller.clientHeight);
+            const wanted = Math.max(0, Math.min(most, rect.top - top)); // (as far as the document's ends let it)
+            if (Math.abs(this.scroller.scrollTop - wanted) < 0.5) break;
+            this.scroller.scrollTop = wanted;
+            this._layout();
+        }
+        this._drawOverlay();
     }
 
     /** The rectangle (client coordinates) a caret at `position` takes; null when it is not laid out. */
@@ -1342,8 +1374,14 @@ export class VirtualTextView extends EventTarget {
         const selection = this.selection;
         toPage(selection ? this._rectsOfRanges([selection], true) : [], this.documentStyle.selectionColor,
             this._selectionPool, 'vtv-selection');
+        // (the band behind the caret's line, where the document's style has one: the raw Markdown view's)
+        const band = this.documentStyle.currentLineColor;
+        const line = band && this.caret ? this._caretRect(this.caret) : null;
+        this.currentLine.style.cssText = line
+            ? `display:block;top:${line.top}px;height:${line.height}px;background:${band};`
+            : '';
         const showCaret = this.caret && this._focused && (!this._readOnly || selection);
-        const rect = showCaret && !selection ? this._caretRect(this.caret) : showCaret ? this._caretRect(this.caret) : null;
+        const rect = showCaret ? line ?? this._caretRect(this.caret) : null;
         if (rect && !this._composing) {
             this.caretElement.style.display = '';
             this.caretElement.style.left = rect.left + 'px';

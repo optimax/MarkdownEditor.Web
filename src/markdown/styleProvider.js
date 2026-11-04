@@ -249,6 +249,45 @@ export class MarkdownStyleProvider {
     }
 }
 
+/**
+ * The look of the raw Markdown view (MaxPad's RawStyleProvider): the code font, no margins, nothing hidden -- what the file
+ * holds is what is drawn -- and a light band behind the caret's line. The width and the centering are the formatted
+ * view's (`document`, a MarkdownStyleProvider), so that switching views does not move the text sideways.
+ */
+export class RawStyleProvider {
+    constructor(document) {
+        this.document = document;
+    }
+
+    get theme() {
+        return this.document.theme;
+    }
+
+    getDocumentStyle() {
+        const band = this.theme.currentLineColor ?? (isDarkColor(this.theme.background) ? '#2b2d24' : '#fffbdd');
+        return { ...this.document.getDocumentStyle(), currentLineColor: band };
+    }
+
+    getParagraphStyle() {
+        const t = this.theme;
+        return {
+            name: 'Markdown', fontFamily: t.codeFontFamily, fontSize: Math.round(t.fontSize * 0.94 * 10) / 10, color: t.color,
+            lineHeight: 1.5, margin: 0,
+        };
+    }
+
+    getCharacterStyle() {
+        return {};
+    }
+}
+
+function isDarkColor(color) {
+    const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(color ?? '');
+    if (!match) return false;
+    const [r, g, b] = match.slice(1).map((hex) => parseInt(hex, 16));
+    return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+}
+
 const isCode = (kind) => kind.startsWith('code') || kind === 'html' || kind === 'front-matter';
 
 function sides4(value) {

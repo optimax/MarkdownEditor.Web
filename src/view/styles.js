@@ -10,7 +10,7 @@
 // CharacterStyle: { fontFamily, fontSize, bold, italic, color, background, underline, strikethrough,
 //   script ('sub' | 'super'), hidden, css }
 // DocumentStyle: { maxWidth, placement ('left' | 'center'), background, color, selectionColor, caretColor,
-//   highlightColor }
+//   highlightColor, currentLineColor (a band behind the caret's line; none by default) }
 
 export const DEFAULT_PARAGRAPH_STYLE = Object.freeze({
     name: '', fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', fontSize: 16, bold: false,
@@ -24,6 +24,7 @@ export const DEFAULT_LINK_STYLE = Object.freeze({ color: '#0563c1', underline: t
 export const DEFAULT_DOCUMENT_STYLE = Object.freeze({
     maxWidth: Infinity, placement: 'left', background: '#ffffff', color: '#1f2328',
     selectionColor: 'rgba(51, 144, 255, 0.28)', caretColor: '#000000', highlightColor: 'rgba(255, 213, 0, 0.45)',
+    currentLineColor: null,
 });
 
 /** Four sides of a thickness given as a number or [top, right, bottom, left] (CSS's order). */

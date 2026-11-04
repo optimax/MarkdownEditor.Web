@@ -46,7 +46,8 @@ src/
     blocks.js           the paragraph types and inserted blocks
     history.js          undo and redo of the source
     controller.js       the loop between source, projection and view
-    styleProvider.js    the default look, and its themes
+    rawView.js          the raw Markdown view: the source edited in place
+    styleProvider.js    the default look, its themes, the raw view's look
 demo/                   the editor, the element in a form, TinyPad
 test/                   a browser test runner and the tests
 tools/serve.ps1         a local web server for the demos and tests
@@ -60,7 +61,8 @@ How they map to MarkdownTools:
 | `markdown/parser.js`, `inlines.js` | `MaxPad.Dom` (Markdig's tree there) |
 | `markdown/projection.js` | `MaxPad.Projection` (`MarkdownProjection`, `InlineWalker`) |
 | `markdown/commands.js`, `formatting.js`, `history.js`, `controller.js` | `MaxPad.Editing` |
-| `markdown/styleProvider.js` | `MaxPad.Projection`'s `MarkdownStyleProvider` |
+| `markdown/styleProvider.js` | `MaxPad.Projection`'s `MarkdownStyleProvider` and `RawStyleProvider` |
+| `markdown/rawView.js` | `MaxPad.Projection`'s `RawView`, `MaxPad`'s `RawModeService` |
 | `markdown/blocks.js` | `MaxPad`'s `ParagraphService` |
 | `MarkdownEditor.js`, `element.js` | `MaxPad` (the window) |
 
@@ -148,8 +150,9 @@ A style provider is an object with any of `getParagraphStyle(id)`,
 - **Character style:** only what it overrides: font, size, bold, italic, color, background,
   decorations, `script` (`'sub'` or `'super'`), and `css`.
 - **Document style:** `maxWidth` and `placement` (the text held to a width, centered or not;
-  the scroll bar stays at the edge), background, color, and the colors of the selection, the
-  caret and the highlights.
+  the scroll bar stays at the edge), background, color, the colors of the selection, the
+  caret and the highlights, and `currentLineColor`: a band behind the caret's line (none by
+  default; the raw Markdown view has one, as MaxPad's).
 
 `ResolvedParagraphStyle` turns a paragraph style into two strings of CSS, one for the outer
 element and one for the box, and the numbers that height estimates use. **The margin is the
@@ -163,6 +166,7 @@ style per ID, and the CSS of a character style per ID, until `invalidateStyles()
 host (.vtv)                       the host's element
   .vtv-scroller                   overflow: auto, fills the host
     .vtv-page                     its height is the document's
+      .vtv-underlay               under the text: the current line's band
       .vtv-content                absolute, at the top of the first
                                   paragraph laid out
         .vtv-para                 a paragraph: the margins as padding
@@ -237,6 +241,8 @@ The browser lays the text out; the view reads the geometry back with DOM ranges.
   translucent: one per line of each paragraph laid out (merged per line), and a little more
   at the end of a paragraph the selection goes past. The caret is a 2 px element there, made
   to blink by CSS (the animation starts again at every move).
+- **The current line's band**, where the document style has a `currentLineColor`, is in
+  `.vtv-underlay`, under the text: as tall as the caret's line and as wide as the page.
 
 ### 4.7 Input
 
@@ -293,6 +299,8 @@ What a host calls:
 | `batch(fn)` | The layout held back until `fn` is done. |
 | `applyEdit(edit)` | Replays a `TextEdit` (`edit.inverse()` to undo it). |
 | `setCaret`, `select`, `selectAll` | The caret and the selection, scrolled into view. |
+| `scrollIntoView`, `scrollToMiddle` | A position brought into view, or to the middle of it. |
+| `lineTopInView(p)`, `scrollToLineAt(p, top)` | Where a position's line is on the screen, and a scroll that puts it there (MaxPad's `ScrollToLineAt`: after a switch of views, the caret's line where the eye left it). |
 | `insertText`, `typeOver`, `deleteSelection` | Edits as the user would make them. |
 | `mapCharacterStyles`, `setCharacterStyle`, `setHyperlink`, `setParagraphStyles` | Formatting, one `TextEdit` each. |
 | `setTypingFormat(fn)` | The format of what is typed next (dropped when the caret moves). |
@@ -634,10 +642,62 @@ command each `seal` the last step, so that the next starts another.
   `insertLink`, `insertImage`, `linkAtCaret`, `select(anchor, caret)`, `replace(start, end,
   text)` (an edit of the host's own, one step), `undo`, `redo`. Events: `change` after each
   change of the source, `selectionchange`, `pasteother`. `version` counts the changes.
+- **Standing aside:** `suspend()` while the view shows something else (the raw Markdown view,
+  section 9): every listener of the controller's on the view does nothing (the view's edit
+  commands are then the view's own), and it reads no caret from the view. `resume(source,
+  caret, anchor)` gives the view back: the document is `source` (when it differs, one step of
+  the history, its "before" the selection at `suspend`, so that one undo brings back the
+  document as it was), and the view is given the paragraphs and the selection again.
 
 ------
 
-## 9. The look: `styleProvider.js`
+## 9. The raw Markdown view: `rawView.js`
+
+MaxPad's View > Raw Markdown, in the model the user chose for it (2026-09-22, MaxWrite's):
+the document's source shown and edited in place, in the same view, as plain text. Here it is
+`MarkdownEditor.rawMode` (the toolbar's last button, Ctrl+Shift+R; the demo's "Show the
+Markdown").
+
+- **Looking changes nothing.** A view that is left as it was gives the document back exactly,
+  its history too (a redo waiting stays waiting).
+- **Text changed in it becomes the document when the view is left,** as one step of the
+  document's history (`controller.resume`): one undo brings the document back as it was before
+  the view began.
+- **While it is on it has a history of its own** (`RawHistory`): the view's own `TextEdit`s,
+  undone and redone one at a time, which ends with the view.
+- **Its paragraphs are the formatted view's.** A paragraph of the raw view starts at the start
+  of the line a projected paragraph begins on (the cells of a table row share one), and holds
+  the lines up to the next: its line endings are breaks inside it (U+2028), the last its end,
+  so the blank line that separates two blocks is a break at the end of the first
+  (`rawStarts`, `rawTexts`). The last paragraph keeps everything to the end of the text.
+- **A place in the source is the same place in either view.** With "\n" line endings and a
+  break being one character, a raw position is its paragraph's start plus its index
+  (`toRaw`); once the text was edited, a position is the lengths of the paragraphs before it,
+  plus one each, plus its index (`rawToSource`, and back, `rawFromSource`). The source the
+  view says is its paragraphs joined by "\n", each break a "\n" (`sourceOfRaw`).
+- **Entering** (`RawMode.enter`): the controller is suspended, the view gets the raw look
+  (`RawStyleProvider`, section 10), `rawHistory` as its `editRecorder`, the paragraphs, and the
+  caret and the selection where they were. The view then edits by itself: typing, Enter (a
+  new line), Shift+Enter (a break, the same in the source), Backspace, Delete, Tab, paste
+  (its line endings new lines), cut and copy (the selected text, breaks as line endings).
+- **Leaving** (`RawMode.exit`): the caret and the anchor are mapped to the source of the
+  view's text; the controller resumes with that source if it changed, or with the document as
+  it was. `commit()` makes the text the document and stays in the view; `abandon()` drops it
+  (a new document is being loaded).
+- **The component** (section 11) keeps the caret's line where the eye left it
+  (`lineTopInView`, then `scrollToLineAt`; the middle when it was out of sight). While the raw
+  view is on, `value` is the text the view holds (in the document's line endings), `version`
+  counts its edits too, `change` and `selectionchange` come from the view, `undo` and `redo`
+  are the raw history's, and the formats, the paragraph types and the inserted blocks do
+  nothing (their toolbar buttons are off). Setting `value` leaves the view without its text.
+- **Not as in MaxPad:** MaxPad's raw stylesheet (each kind of line in a look of its own), the
+  gutter's line types, its line and column in the status bar, and the raw line-ending marks
+  of its own are not done here; the formatting marks (¶ and ↵) work as in the formatted
+  view.
+
+------
+
+## 10. The look: `styleProvider.js`
 
 `MarkdownStyleProvider(theme)` resolves the projection's style IDs. Its colors and proportions
 are MaxPad's: headings 2, 1.69, 1.44, 1.25, 1.13 and 1.06 times the body's size, in the
@@ -660,17 +720,22 @@ light background; quotes in a quiet color.
   colors, `documentWidth`, `centered`, `listIndent`, `paragraphSpacing`, `headingLines`...).
   A page gives a theme in part, over the light one (or over the dark one, with
   `base: 'dark'`).
+- **The raw view's look** (`RawStyleProvider`, MaxPad's): the theme's code font a little
+  smaller than the body, no margins, nothing hidden or styled, and a light band behind the
+  caret's line (the theme's `currentLineColor`, or a light yellow, a dark one in a dark
+  theme). Its width and its centering are the formatted view's, so that switching views does
+  not move the text sideways.
 
 ------
 
-## 10. The component: `MarkdownEditor.js`
+## 11. The component: `MarkdownEditor.js`
 
 `new MarkdownEditor(target, options)` puts into `target` (an element, or a selector) a root
 (`.mde`: flex, as tall as its target), a toolbar if wanted, and the view; it makes the style
 provider from the theme and the controller from the Markdown. Options: `markdown`, `theme`,
 `toolbar` (`true`, `false`, or a list of `DEFAULT_TOOLBAR`'s items), `readOnly`,
 `revealSyntax`, `revealUnfocused`, `showFormattingMarks`, `imageBase`, `openLinks`,
-`prompt`, `padding`, `label`, `onChange`.
+`prompt`, `padding`, `label`, `onChange`, `rawMode` (start in the raw Markdown view).
 
 - **The keys** are bound in the view's `keymap`, as MaxPad's where a browser leaves them to a
   page:
@@ -684,9 +749,12 @@ provider from the theme and the controller from the Markdown. Options: `markdown
   | Ctrl+=, Ctrl+- | `stepHeadingLevel` |
   | Ctrl+Shift+7, 8, 9 | numbered list, bullet list, task list |
   | Ctrl+Alt+Q, C, L | quote, code block, horizontal line |
+  | Ctrl+Shift+R | the raw Markdown view on or off (`toggleRawMode`) |
 
   A browser gives a page Ctrl+1 to Ctrl+6 before it switches tabs with them, and switches
-  none when the page takes them. MaxPad's Ctrl+Shift+T, Q, C, \[ and \] are the browser's own,
+  none when the page takes them; Ctrl+Shift+R too, before it reloads the page (MaxPad's
+  Ctrl+Shift+W, the formatted view, is the browser's: here Ctrl+Shift+R goes back and forth).
+  MaxPad's Ctrl+Shift+T, Q, C, \[ and \] are the browser's own,
   hence the other keys for the lists, the quote and the code block. The backquote, = and -
   keys are recognized by where they are on the keyboard (`code`), and, for a key that reports
   none (a virtual keyboard's), by what it types.
@@ -695,7 +763,8 @@ provider from the theme and the controller from the Markdown. Options: `markdown
 - **The toolbar:** buttons with inline SVG icons that do not take the focus (a click keeps
   the caret in the editor), and a list of paragraph and heading levels. After every change
   and every move of the caret it shows which formats are on, the paragraph's type, and
-  whether undo and redo can be done.
+  whether undo and redo can be done. Its last button is the raw Markdown view; while that is
+  on, only undo, redo, the marks and that button are on.
 - **Links:** Ctrl+click raises `linkclick` (`detail.href`, `detail.title`); unless the page
   cancels it, an `http`, `https` or `mailto` link opens in a new tab.
 - **Theme colors** for the frame and the toolbar are CSS variables on the root, set from the
@@ -705,11 +774,12 @@ provider from the theme and the controller from the Markdown. Options: `markdown
   `focus`, `destroy`, `undo`, `redo`, `canUndo`, `canRedo`, `toggleInline`, `isInline`,
   `setBlockType`, `setHeadingLevel`, `stepHeadingLevel`, `blockType`, `insertTable`,
   `insertRule`, `insertCodeBlock`, `insertLink`, `insertImage`, `promptLink`, `promptImage`,
-  `execute(name)`; events `change`, `selectionchange`, `linkclick`.
+  `rawMode`, `toggleRawMode`, `execute(name)`; events `change`, `selectionchange`,
+  `linkclick`, `modechange` (the raw view on or off).
 
 ------
 
-## 11. The element: `element.js`
+## 12. The element: `element.js`
 
 `<markdown-editor>` makes a `MarkdownEditor` in itself when it is put in the page.
 
@@ -725,7 +795,7 @@ provider from the theme and the controller from the Markdown. Options: `markdown
 
 ------
 
-## 12. Tests
+## 13. Tests
 
 `test/index.html` runs the tests in the browser (the project needs no Node):
 `test/harness.js` gives `test`, `equal` and `ok`, runs every test, writes the failures into the
@@ -739,6 +809,7 @@ the suites; `?steps=150` makes the random test longer.
 | `commands.test.js` | each editing rule, the formats and the paragraph types, written with `¦` for the caret and `«...»` for a selection, as MaxPad.Editing.Tests write theirs |
 | `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits |
 | `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them |
+| `raw.test.js` | the raw view's paragraphs and its map to the source (every offset there and back); looking that changes nothing; text changed in it as one undo step; no formats in it |
 
 After every command `editor.test.js` checks what MaxPad.Editing.Tests check: the view's
 paragraphs are those of a fresh projection of the source (text, style and runs), and only the
@@ -754,7 +825,7 @@ PowerShell (ES modules are not loaded from `file://` pages).
 
 ------
 
-## 13. Costs
+## 14. Costs
 
 Each edit reads and projects the whole source again; the view is then given only what
 changed, and lays out only what is in view. Typing a character took 4 ms in an 11 KB
@@ -765,21 +836,22 @@ reads again only the blocks an edit touched; that is the change long documents n
 
 ------
 
-## 14. Not done, and differences from MaxPad
+## 15. Not done, and differences from MaxPad
 
-- Incremental parsing (section 13).
-- MaxPad's raw Markdown mode, outline, find and replace, paragraph annotations, stylesheet
-  files, spelling and export; code highlighting; drag and drop of text; pasting pictures;
-  table commands beyond typing, Tab and Enter.
+- Incremental parsing (section 14).
+- MaxPad's outline, find and replace, paragraph annotations, stylesheet files (the raw
+  view's too, section 9), spelling and export; code highlighting; drag and drop of text;
+  pasting pictures; table commands beyond typing, Tab and Enter.
 - A document whose line endings are a mixture is saved with its first kind.
 - An editor without the focus shows no syntax (MaxPad shows it at the caret always; section
   8).
-- The keys that a browser keeps are elsewhere (section 10).
+- The keys that a browser keeps are elsewhere (section 11); Ctrl+Shift+R switches the raw
+  view both ways, MaxPad's Ctrl+Shift+W being the browser's.
 - Tried in Chrome only; Firefox, Safari, phone keyboards and input methods not yet.
 
 ------
 
-## 15. Keeping this document current
+## 16. Keeping this document current
 
 This document describes the source as it is. Every change to how the editor works updates it
 in the same change: what a module does, a rule of the projection or the editing, a key, an

@@ -36,14 +36,53 @@ export class MarkdownController extends EventTarget {
         this.selection = { anchor: 0, caret: 0 };
         this._placed = null; // (the view's selection as the controller last put it)
         this._revealed = []; // ({ paragraph object, index }: the view paragraphs whose syntax is shown)
-        view.addEventListener('editcommand', (event) => this._onEditCommand(event));
-        view.addEventListener('selectionchange', () => this._onViewSelection());
-        view.addEventListener('runclick', (event) => this._onRunClick(event));
-        view.addEventListener('undo', () => this.undo());
-        view.addEventListener('redo', () => this.redo());
+        this.suspended = false; // (while the view shows something else: the raw Markdown view)
+        const listen = (type, handler) => view.addEventListener(type, (event) => {
+            if (!this.suspended) handler(event);
+        });
+        listen('editcommand', (event) => this._onEditCommand(event));
+        listen('selectionchange', () => this._onViewSelection());
+        listen('runclick', (event) => this._onRunClick(event));
+        listen('undo', () => this.undo());
+        listen('redo', () => this.redo());
         // (on a page, an editor without the focus shows no syntax: it reads as the formatted text it is)
-        for (const type of ['focus', 'blur']) view.addEventListener(type, () => view.batch(() => this._reveal()));
+        for (const type of ['focus', 'blur']) listen(type, () => view.batch(() => this._reveal()));
         this.load(options.markdown ?? '');
+    }
+
+    /**
+     * The view is another's for a while (the raw Markdown view): the controller does nothing with it -- its edit commands
+     * are the view's own -- until `resume`.
+     */
+    suspend() {
+        this.history.seal();
+        this.suspended = true;
+        this._revealed = [];
+        this._placed = null;
+    }
+
+    /**
+     * The view is the controller's again: it shows `source` (the document as it was, or the text the view made of it,
+     * which is then one step of the history, undone back to the document before `suspend`), the caret and the selection
+     * at `caret` and `anchor` in it.
+     */
+    resume(source, caret, anchor = caret) {
+        this.suspended = false;
+        const changed = source !== this.state.source;
+        if (changed) {
+            const change = difference(this.state.source, source, Math.min(caret, anchor));
+            this.history.record({
+                ...change, kind: 'raw', before: { ...this.selection }, after: { caret, anchor },
+            });
+            this.history.seal();
+            this.state = new MarkdownState(source, { caret });
+        }
+        const clamp = (offset) => Math.max(0, Math.min(this.state.source.length, offset));
+        this.selection = { anchor: clamp(anchor), caret: clamp(caret) };
+        this._revealed = [];
+        this.view.setParagraphs(this.state.paragraphs.map((p) => this._viewParagraph(p)));
+        this._showSelection(true);
+        if (changed) this._changed();
     }
 
     // ---- The document ------------------------------------------------------------------------------------------------
@@ -280,7 +319,7 @@ export class MarkdownController extends EventTarget {
     // command must not act on the caret before it): true if it changed.
     _syncFromView() {
         const view = this.view;
-        if (!view.caret) return false;
+        if (!view.caret || this.suspended) return false; // (suspended, the view's caret is in another's text)
         const placed = this._placed;
         if (placed && samePosition(placed.caret, view.caret) && samePosition(placed.anchor, view.anchor)) return false;
         const projection = this.state.projection;

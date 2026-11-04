@@ -60,7 +60,7 @@ powershell -ExecutionPolicy Bypass -File tools/serve.ps1
 Then open:
 
 - <http://localhost:8765/demo/index.html>: the editor, with its toolbar, the Markdown
-  beside it, a dark theme and read-only mode.
+  shown and edited in place ("Show the Markdown"), a dark theme and read-only mode.
 - <http://localhost:8765/demo/element.html>: `<markdown-editor>` in a form.
 - <http://localhost:8765/demo/tinypad.html>: TinyPad, the tutorial's small word processor,
   on the bare `VirtualTextView`.
@@ -84,6 +84,7 @@ of one). The options, all optional:
 | `imageBase` | The URL relative picture addresses are loaded from. |
 | `openLinks` | Ctrl+click opens a link in a new tab (`true` by default). |
 | `prompt` | `async (question, value) => answer`: asks for a link's address. |
+| `rawMode` | Start in the raw Markdown view (below). |
 
 What a page reads and calls:
 
@@ -101,12 +102,21 @@ What a page reads and calls:
 | `insertTable()` | Also `insertRule()`, `insertCodeBlock()`, `insertLink(url)`, |
 | | `insertImage(url, alt)`. |
 | `execute(name)` | Any toolbar command by name (`'h2'`, `'bullet'`, `'link'`...). |
+| `rawMode`, `toggleRawMode()` | The raw Markdown view on or off (below). |
 | `theme`, `zoom` | Change the look, or the scale, at any time. |
 | `readOnly`, `focus()` | As their names say. |
 | `destroy()` | Takes the editor out of the page. |
 
 Events (`addEventListener`): `change` after each change of the Markdown, `selectionchange`,
-and `linkclick` (`detail.href`; call `preventDefault()` to handle it yourself).
+`modechange` (the raw view on or off), and `linkclick` (`detail.href`; call
+`preventDefault()` to handle it yourself).
+
+**The raw Markdown view** (`rawMode`, the toolbar's last button, Ctrl+Shift+R) shows the
+Markdown itself in the editor, as plain text, and lets you edit it there, as MaxPad's View >
+Raw Markdown: the caret stays where it was, looking changes nothing, and what you change
+there becomes the document when you leave the view, one undo bringing back the document as it
+was before. While it is on, `value` is the text it shows, and undo and redo go an edit at a
+time.
 
 A theme object overrides any of `LIGHT_THEME`'s values: `fontFamily`, `fontSize`,
 `codeFontFamily`, `color`, `background`, `headingColor`, `linkColor`, `syntaxColor`,
@@ -129,6 +139,7 @@ A theme object overrides any of `LIGHT_THEME`'s values: `fontFamily`, `fontSize`
 | Ctrl+Shift+7, 8, 9 | Numbered list, bullet list, task list |
 | Ctrl+Alt+Q, C, L | Quote, code block, horizontal line |
 | Ctrl+Z, Ctrl+Y | Undo, redo |
+| Ctrl+Shift+R | The raw Markdown view on or off |
 | Ctrl and the mouse wheel | Zoom (about 2% a notch) |
 
 The keys are MaxPad's. A browser gives the page Ctrl+1 to Ctrl+6 before it switches tabs with
@@ -174,8 +185,8 @@ clipboard.
   4 ms in an 11 KB document, 11 ms at 50 KB and 22 ms at 167 KB (Chrome, on the development
   machine, 2026-11-03). MaxPad reads again only the blocks an edit touched, which is what
   very long documents need here.
-- MaxPad's features beyond the editor itself: raw Markdown mode, the outline, find and
-  replace, the paragraph annotations, the stylesheet files, spelling, export.
+- MaxPad's features beyond the editor itself: the outline, find and replace, the paragraph
+  annotations, the stylesheet files, spelling, export.
 - Code highlighting by language, drag and drop of text, and pasting pictures.
 - Table commands beyond typing in cells, Tab and Enter (rows and columns added or deleted,
   alignment).

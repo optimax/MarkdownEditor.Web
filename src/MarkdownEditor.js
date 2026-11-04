@@ -8,7 +8,8 @@
 
 import { VirtualTextView } from './view/VirtualTextView.js';
 import { MarkdownController } from './markdown/controller.js';
-import { MarkdownStyleProvider, LIGHT_THEME, DARK_THEME } from './markdown/styleProvider.js';
+import { MarkdownStyleProvider, RawStyleProvider, LIGHT_THEME, DARK_THEME } from './markdown/styleProvider.js';
+import { RawMode, rawToSource, rawFromSource } from './markdown/rawView.js';
 
 const CSS = `
 .mde { display: flex; flex-direction: column; box-sizing: border-box; height: 100%; min-height: 200px;
@@ -66,11 +67,16 @@ const ICONS = {
     image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/>' +
         '<path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/>',
     marks: '<path d="M13 4v16"/><path d="M17 4v16"/><path d="M19 4H9.5a4.5 4.5 0 0 0 0 9H13"/>',
+    raw: '<path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/>' +
+        '<path d="m10 13-2 2 2 2"/><path d="m14 17 2-2-2-2"/>',
 };
 
 /** The toolbar's items, in order ('|' a separator): what `toolbar: true` shows. */
 export const DEFAULT_TOOLBAR = ['undo', 'redo', '|', 'block', '|', 'strong', 'em', 'underline', 'strike', 'code', '|',
-    'quote', 'bullet', 'number', 'task', 'codeblock', '|', 'link', 'image', 'table', 'rule', '|', 'marks'];
+    'quote', 'bullet', 'number', 'task', 'codeblock', '|', 'link', 'image', 'table', 'rule', '|', 'marks', 'raw'];
+
+// (what the raw Markdown view leaves on: the rest of the toolbar formats, which the source shown as it is has none of)
+const RAW_ITEMS = new Set(['undo', 'redo', 'marks', 'raw']);
 
 const LABELS = {
     undo: 'Undo (Ctrl+Z)', redo: 'Redo (Ctrl+Y)', strong: 'Bold (Ctrl+B)', em: 'Italic (Ctrl+I)', underline: 'Underline (Ctrl+U)',
@@ -78,6 +84,7 @@ const LABELS = {
     bullet: 'Bullet list (Ctrl+Shift+8)', number: 'Numbered list (Ctrl+Shift+7)', task: 'Task list (Ctrl+Shift+9)',
     codeblock: 'Code block (Ctrl+Alt+C)', link: 'Link (Ctrl+K)', image: 'Picture', table: 'Table',
     rule: 'Horizontal line (Ctrl+Alt+L)', marks: 'Paragraph marks', block: 'Paragraph or heading (Ctrl+0 to Ctrl+6)',
+    raw: 'Markdown source (Ctrl+Shift+R)',
 };
 
 const BLOCK_OPTIONS = [['paragraph', 'Paragraph'], ['h1', 'Heading 1'], ['h2', 'Heading 2'], ['h3', 'Heading 3'],
@@ -91,7 +98,7 @@ export class MarkdownEditor extends EventTarget {
      *   revealUnfocused (shown while the editor has no focus too; false by default), showFormattingMarks,
      *   imageBase (the URL relative pictures are loaded from), openLinks (Ctrl+click opens a link in a new tab; true
      *   by default), prompt (an async function (question, value) asking the user for a link's or a picture's
-     *   address; window.prompt by default) }
+     *   address; window.prompt by default), rawMode (start in the raw Markdown view) }
      */
     constructor(target, options = {}) {
         super();
@@ -118,44 +125,108 @@ export class MarkdownEditor extends EventTarget {
             markdown: this.options.markdown ?? '', revealSyntax: this.options.revealSyntax !== false,
             revealUnfocused: this.options.revealUnfocused === true,
         });
+        this.raw = new RawMode(this.view, this.controller, new RawStyleProvider(this.styles));
+        this._rawChanges = 0; // (the edits made in the raw view, which `version` counts as well)
         this._applyThemeColors();
         this._buildToolbar();
         this._bindKeys();
-        this.controller.addEventListener('change', () => {
+        const changed = () => {
             this._refreshToolbar();
             this.dispatchEvent(new Event('change'));
             this.options.onChange?.(this);
-        });
-        this.controller.addEventListener('selectionchange', () => {
+        };
+        const moved = () => {
             this._refreshToolbar();
             this.dispatchEvent(new Event('selectionchange'));
+        };
+        this.controller.addEventListener('change', changed);
+        this.controller.addEventListener('selectionchange', moved);
+        // (in the raw view the edits and the moves are the view's own)
+        this.view.addEventListener('documentchange', () => {
+            if (!this.raw.isOn || this.view.version === this.raw.session.loadedVersion) return;
+            this._rawChanges++;
+            changed();
         });
+        this.view.addEventListener('selectionchange', () => {
+            if (this.raw.isOn) moved();
+        });
+        // (the browser's own Undo and Redo, which the controller takes outside the raw view)
+        this.view.addEventListener('undo', () => this.raw.isOn && this.undo());
+        this.view.addEventListener('redo', () => this.raw.isOn && this.redo());
         this.view.addEventListener('hyperlinkclick', (event) => this._onLinkClick(event));
+        if (this.options.rawMode) this.rawMode = true;
         this._refreshToolbar();
     }
 
     // ---- The document ------------------------------------------------------------------------------------------------
 
-    /** The Markdown being edited (in the line endings it was given in). Setting it loads a new document. */
+    /**
+     * The Markdown being edited (in the line endings it was given in): in the raw view, the text it holds. Setting it
+     * loads a new document (in the formatted view).
+     */
     get value() {
-        return this.controller.getMarkdown();
+        if (!this.raw.isOn) return this.controller.getMarkdown();
+        const source = this.raw.source(), ending = this.controller.lineEnding;
+        return ending === '\n' ? source : source.replace(/\n/g, ending);
     }
 
     set value(markdown) {
+        const wasRaw = this.raw.isOn;
+        this.raw.abandon();
         this.controller.load(String(markdown ?? ''));
+        if (wasRaw) this._modeChanged();
     }
 
     getMarkdown() {
-        return this.controller.getMarkdown();
+        return this.value;
     }
 
     setMarkdown(markdown) {
         this.value = markdown;
     }
 
-    /** Counts every change of the document: a saved document's version is a clean one. */
+    /** Counts every change of the document (the raw view's edits too): a saved document's version is a clean one. */
     get version() {
-        return this.controller.version;
+        return this.controller.version + this._rawChanges;
+    }
+
+    // ---- The raw Markdown view -------------------------------------------------------------------------------------
+
+    /**
+     * Whether the raw Markdown view is on: the document's source shown and edited as it is, in place of the formatted
+     * text (MaxPad's View > Raw Markdown). Looking changes nothing; text changed there becomes the document when the view
+     * is left, as one step of the history. The caret, the selection and the caret's line on the screen stay.
+     */
+    get rawMode() {
+        return this.raw.isOn;
+    }
+
+    set rawMode(on) {
+        if (!!on === this.raw.isOn) return;
+        const caret = this.view.caret;
+        const top = caret ? this.view.lineTopInView(caret) : null;
+        if (on) this.raw.enter();
+        else this.raw.exit();
+        const now = this.view.caret;
+        if (now) {
+            if (top !== null) this.view.scrollToLineAt(now, top);
+            else this.view.scrollToMiddle(now);
+        }
+        this._modeChanged();
+    }
+
+    toggleRawMode() {
+        this.rawMode = !this.rawMode;
+    }
+
+    _modeChanged() {
+        this._refreshToolbar();
+        this.dispatchEvent(new Event('modechange'));
+    }
+
+    // Whether the commands that format the document can run: not in a read-only document, nor in the raw view.
+    get _canFormat() {
+        return !this.readOnly && !this.raw.isOn;
     }
 
     get readOnly() {
@@ -215,12 +286,17 @@ export class MarkdownEditor extends EventTarget {
 
     /** The selection in the Markdown: { anchor, caret }, offsets in the source with "\n" line endings. */
     get selection() {
-        return { ...this.controller.selection };
+        if (!this.raw.isOn) return { ...this.controller.selection };
+        const texts = this.raw.texts(), view = this.view;
+        const at = (position) => rawToSource(position ?? { paragraph: 0, index: 0 }, texts);
+        return { anchor: at(view.anchor ?? view.caret), caret: at(view.caret) };
     }
 
     /** Selects from `anchor` to `caret` (offsets in the source with "\n" line endings), and scrolls it into view. */
     select(anchor, caret = anchor) {
-        this.controller.select(anchor, caret);
+        if (!this.raw.isOn) return this.controller.select(anchor, caret);
+        const texts = this.raw.texts();
+        return this.view.select(rawFromSource(anchor, texts), rawFromSource(caret, texts));
     }
 
     focus() {
@@ -235,73 +311,79 @@ export class MarkdownEditor extends EventTarget {
 
     // ---- Commands ----------------------------------------------------------------------------------------------------
 
+    /** Undoes a step: of the document's history, or in the raw view of its own (an edit at a time). */
     undo() {
-        this.controller.undo();
+        if (this.raw.isOn) this.raw.undo();
+        else this.controller.undo();
+        this._refreshToolbar();
     }
 
     redo() {
-        this.controller.redo();
+        if (this.raw.isOn) this.raw.redo();
+        else this.controller.redo();
+        this._refreshToolbar();
     }
 
     get canUndo() {
-        return this.controller.canUndo;
+        return this.raw.isOn ? this.raw.canUndo : this.controller.canUndo;
     }
 
     get canRedo() {
-        return this.controller.canRedo;
+        return this.raw.isOn ? this.raw.canRedo : this.controller.canRedo;
     }
 
     /** Toggles an inline format: 'strong', 'em', 'underline', 'strike', 'code', 'sub', 'sup'. */
     toggleInline(format) {
-        if (!this.readOnly) this.controller.toggleInline(format);
+        if (this._canFormat) this.controller.toggleInline(format);
     }
 
     isInline(format) {
-        return this.controller.isInline(format);
+        return !this.raw.isOn && this.controller.isInline(format);
     }
 
     /** 'paragraph', 'h1' to 'h6', 'quote', 'bullet', 'number', 'task' or 'code' (a toggle, as the toolbar's buttons). */
     setBlockType(type) {
-        if (!this.readOnly) this.controller.setBlockType(type);
+        if (this._canFormat) this.controller.setBlockType(type);
     }
 
     /** Headings of `level` (1 to 6), or paragraphs (0), of the paragraphs the selection touches: not a toggle. */
     setHeadingLevel(level) {
-        if (!this.readOnly) this.controller.setHeadingLevel(level);
+        if (this._canFormat) this.controller.setHeadingLevel(level);
     }
 
     /** One heading level deeper (`by` 1: a paragraph becomes Heading 1) or shallower (-1). */
     stepHeadingLevel(by) {
-        if (!this.readOnly) this.controller.stepHeadingLevel(by);
+        if (this._canFormat) this.controller.stepHeadingLevel(by);
     }
 
+    /** The type of the paragraph at the caret ('markdown' in the raw view). */
     get blockType() {
-        return this.controller.blockType;
+        return this.raw.isOn ? 'markdown' : this.controller.blockType;
     }
 
     insertTable(columns = 3, rows = 2) {
-        if (!this.readOnly) this.controller.insertTable(columns, rows);
+        if (this._canFormat) this.controller.insertTable(columns, rows);
     }
 
     insertRule() {
-        if (!this.readOnly) this.controller.insertRule();
+        if (this._canFormat) this.controller.insertRule();
     }
 
     insertCodeBlock(language = '') {
-        if (!this.readOnly) this.controller.insertCodeBlock(language);
+        if (this._canFormat) this.controller.insertCodeBlock(language);
     }
 
     insertLink(address, title = '') {
-        if (!this.readOnly) this.controller.insertLink(address, title);
+        if (this._canFormat) this.controller.insertLink(address, title);
     }
 
     insertImage(address, description = '') {
-        if (!this.readOnly) this.controller.insertImage(address, description);
+        if (this._canFormat) this.controller.insertImage(address, description);
     }
 
     /** Asks for a link's address (the page's `prompt`, or the browser's) and makes the selection a link to it. */
     async promptLink() {
-        if (this.readOnly) return;
+        if (!this._canFormat) return;
         const current = this.controller.linkAtCaret();
         const address = await this._ask('Link address:', current?.destination ?? 'https://');
         this.focus();
@@ -309,7 +391,7 @@ export class MarkdownEditor extends EventTarget {
     }
 
     async promptImage() {
-        if (this.readOnly) return;
+        if (!this._canFormat) return;
         const address = await this._ask('Picture address:', '');
         this.focus();
         if (address) this.insertImage(address.trim(), '');
@@ -336,6 +418,7 @@ export class MarkdownEditor extends EventTarget {
             case 'marks':
                 this.showFormattingMarks = !this.showFormattingMarks;
                 return undefined;
+            case 'raw': return this.toggleRawMode();
             default:
                 throw new Error(`MarkdownEditor: no command "${name}".`);
         }
@@ -352,6 +435,7 @@ export class MarkdownEditor extends EventTarget {
             fn();
             return true;
         };
+        keys.set('Ctrl+Shift+R', run(() => this.toggleRawMode()));
         keys.set('Ctrl+Z', run(() => this.undo()));
         keys.set('Ctrl+Y', run(() => this.redo()));
         keys.set('Ctrl+Shift+Z', run(() => this.redo()));
@@ -446,23 +530,24 @@ export class MarkdownEditor extends EventTarget {
 
     _refreshToolbar() {
         if (!this.buttons?.size && !this.blockSelect) return;
-        const readOnly = this.readOnly;
-        const type = this.controller.blockType;
+        const readOnly = this.readOnly, raw = this.raw.isOn;
+        const type = this.blockType;
         for (const [item, button] of this.buttons) {
             let pressed = null;
-            if (['strong', 'em', 'underline', 'strike', 'code'].includes(item)) pressed = this.controller.isInline(item);
+            if (['strong', 'em', 'underline', 'strike', 'code'].includes(item)) pressed = this.isInline(item);
             else if (['quote', 'bullet', 'number', 'task'].includes(item)) pressed = type === item;
             else if (item === 'codeblock') pressed = type === 'code';
             else if (item === 'marks') pressed = this.showFormattingMarks;
+            else if (item === 'raw') pressed = raw;
             if (pressed !== null) button.setAttribute('aria-pressed', String(pressed));
             if (item === 'undo') button.disabled = readOnly || !this.canUndo;
             else if (item === 'redo') button.disabled = readOnly || !this.canRedo;
-            else if (item !== 'marks') button.disabled = readOnly;
+            else if (item !== 'marks' && item !== 'raw') button.disabled = readOnly || (raw && !RAW_ITEMS.has(item));
         }
         if (this.blockSelect) {
             const known = BLOCK_OPTIONS.some(([value]) => value === type);
             this.blockSelect.value = known ? type : 'paragraph';
-            this.blockSelect.disabled = readOnly;
+            this.blockSelect.disabled = readOnly || raw;
         }
     }
 
