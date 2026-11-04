@@ -8,7 +8,7 @@
 
 import { VirtualTextView, GutterContent } from './view/VirtualTextView.js';
 import { MarkdownController } from './markdown/controller.js';
-import { MarkdownStyleProvider, RawStyleProvider, LIGHT_THEME, DARK_THEME } from './markdown/styleProvider.js';
+import { MarkdownStyleProvider, RawStyleProvider } from './markdown/styleProvider.js';
 import { RawMode, rawToSource, rawFromSource } from './markdown/rawView.js';
 
 const CSS = `
@@ -121,7 +121,7 @@ export class MarkdownEditor extends EventTarget {
         this.root.append(this.body);
         host.append(this.root);
 
-        this.styles = new MarkdownStyleProvider(themeOf(this.options.theme));
+        this.styles = new MarkdownStyleProvider(this.options.theme ?? 'light');
         this.view = new VirtualTextView(this.body, {
             styleProvider: this.styles, readOnly: this.options.readOnly, acceptsTab: true,
             showFormattingMarks: this.options.showFormattingMarks, label: this.options.label ?? 'Markdown editor',
@@ -248,10 +248,13 @@ export class MarkdownEditor extends EventTarget {
         this._refreshToolbar();
     }
 
-    /** 'light', 'dark' or a theme object (see styleProvider.js), over the light theme. */
+    /**
+     * 'light', 'dark' or a theme object (see styleProvider.js) over the light theme (over the dark one with `base:
+     * 'dark'`): the default stylesheet's class `mde-dark`, and its custom properties. The getter gives its values.
+     */
     set theme(theme) {
         this.options.theme = theme;
-        this.styles.theme = { ...LIGHT_THEME, ...themeOf(theme) };
+        this.styles.setTheme(theme);
         this.view.invalidateStyles();
         this._applyThemeColors();
     }
@@ -689,12 +692,6 @@ export class MarkdownEditor extends EventTarget {
             window.open(link.target, '_blank', 'noopener');
         }
     }
-}
-
-function themeOf(theme) {
-    if (theme === 'dark') return DARK_THEME;
-    if (!theme || theme === 'light') return LIGHT_THEME;
-    return theme.base === 'dark' ? { ...DARK_THEME, ...theme } : theme;
 }
 
 function isDark(color) {

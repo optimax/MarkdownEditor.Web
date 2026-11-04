@@ -13,7 +13,9 @@
 //   gives the view the paragraphs that changed (`replaceParagraphs`) and calls preventDefault().
 // - It scrolls itself: it fills its host element (which must have a height) and scrolls inside it.
 
-import { DEFAULT_DOCUMENT_STYLE, DEFAULT_LINK_STYLE, ResolvedParagraphStyle, characterCss, sides } from './styles.js';
+import {
+    COMPUTED_PROPERTIES, DEFAULT_DOCUMENT_STYLE, DEFAULT_LINK_STYLE, ResolvedParagraphStyle, characterCss, sides,
+} from './styles.js';
 import {
     SOFT_BREAK, TextEdit, cloneParagraph, comparePositions, formatAt, normalizeRuns, paragraphLength, paragraphText,
     plainParagraph, pos, samePosition, splitRuns, textBetween,
@@ -37,7 +39,13 @@ const CSS = `
   min-height: 0; }
 .vtv-nowrap .vtv-box { white-space: pre; overflow-wrap: normal; }
 .vtv-hidden { font-size: 0 !important; letter-spacing: 0 !important; }
-.vtv-collapsed { font-size: 0 !important; line-height: 0 !important; }
+.vtv-align-left { text-align: left; }
+.vtv-align-center { text-align: center; }
+.vtv-align-right { text-align: right; }
+.vtv-bold { font-weight: 700; }
+.vtv-italic { font-style: italic; }
+.vtv-collapsed { line-height: 0 !important; }
+.vtv-collapsed > * { font-size: 0 !important; }
 .vtv-collapsed .vtv-marker { display: none; }
 .vtv-marker { position: absolute; white-space: nowrap; user-select: none; pointer-events: none; }
 .vtv-link { cursor: pointer; }
@@ -455,7 +463,7 @@ export class VirtualTextView extends EventTarget {
     invalidateStyles() {
         this._paragraphStyles.clear();
         this._characterCss.clear();
-        this._linkCss = null;
+        this._linkLook = null;
         this._styleVersion++;
         this._elements.clear();
         this._applyDocumentStyle();
@@ -740,33 +748,75 @@ export class VirtualTextView extends EventTarget {
         const key = styleId ?? '';
         let resolved = this._paragraphStyles.get(key);
         if (!resolved) {
-            resolved = new ResolvedParagraphStyle(this._styleProvider?.getParagraphStyle?.(styleId ?? null), this._zoom);
-            this._paragraphStyles.set(key, resolved);
+            const style = this._styleProvider?.getParagraphStyle?.(styleId ?? null);
+            const className = typeof style?.className === 'string' ? style.className.trim() : '';
+            // (a style of the host's stylesheet: what it makes of a box of the class, read off a probe; not kept while
+            // the view is out of the page, where nothing is styled)
+            const computed = className ? this._computedStyleOf(className) : null;
+            resolved = new ResolvedParagraphStyle(style, this._zoom, computed);
+            if (!className || this.host.isConnected) this._paragraphStyles.set(key, resolved);
         }
         return resolved;
     }
 
-    _runCss(run) {
-        let css = '';
+    // What the host's stylesheet makes of a paragraph's box of the class, where the paragraphs are (so that what the
+    // content inherits counts).
+    _computedStyleOf(className) {
+        const outer = el('div', 'vtv-para');
+        const box = el('div', 'vtv-box ' + className);
+        outer.style.cssText = 'position:absolute;visibility:hidden;left:0;right:0;';
+        outer.append(box);
+        this.content.append(outer);
+        const style = getComputedStyle(box);
+        const values = {};
+        for (const property of COMPUTED_PROPERTIES) values[property] = style[property];
+        outer.remove();
+        return values;
+    }
+
+    // The CSS and the classes of a run: the hyperlink style's, its character style's, its own bold and italic.
+    _runLook(run) {
+        let css = '', className = '';
+        const look = (style) => ({ css: characterCss(style, this._zoom), className: style?.className?.trim() ?? '' });
         if (run.link) {
-            css += this._linkCss ??= characterCss(this._styleProvider?.getHyperlinkStyle?.() ?? DEFAULT_LINK_STYLE, this._zoom);
+            const link = this._linkLook ??= look(this._styleProvider?.getHyperlinkStyle?.() ?? DEFAULT_LINK_STYLE);
+            css += link.css;
+            className += ' ' + link.className;
         }
         if (run.styleId) {
             let own = this._characterCss.get(run.styleId);
             if (own === undefined) {
-                own = characterCss(this._styleProvider?.getCharacterStyle?.(run.styleId), this._zoom);
+                own = look(this._styleProvider?.getCharacterStyle?.(run.styleId));
                 this._characterCss.set(run.styleId, own);
             }
-            css += own;
+            css += own.css;
+            className += ' ' + own.className;
         }
-        if (run.bold) css += 'font-weight:700;';
-        if (run.italic) css += 'font-style:italic;';
-        return css;
+        if (this._classStyles) {
+            if (run.bold) className += ' vtv-bold';
+            if (run.italic) className += ' vtv-italic';
+        } else {
+            if (run.bold) css += 'font-weight:700;';
+            if (run.italic) css += 'font-style:italic;';
+        }
+        return { css, className: className.trim() };
     }
 
     _applyDocumentStyle() {
         const style = { ...DEFAULT_DOCUMENT_STYLE, ...(this._styleProvider?.getDocumentStyle?.() ?? {}) };
         this.documentStyle = style;
+        // (a stylesheet's document: its classes on the host element, what its rules for the content are under, and its
+        // custom properties there, with the zoom as one more, --vtv-zoom, for sizes the stylesheet scales by it)
+        const classes = typeof style.className === 'string' ? style.className.split(/\s+/).filter(Boolean) : [];
+        for (const name of this._documentClasses ?? []) if (!classes.includes(name)) this.host.classList.remove(name);
+        this.host.classList.add(...classes);
+        this._documentClasses = classes;
+        this._classStyles = classes.length > 0; // (bold and italic runs then by class: the stylesheet's to restyle)
+        const variables = style.variables ?? {};
+        for (const name of this._documentVariables ?? []) if (!(name in variables)) this.host.style.removeProperty(name);
+        for (const [name, value] of Object.entries(variables)) this.host.style.setProperty(name, value);
+        this._documentVariables = Object.keys(variables);
+        this.host.style.setProperty('--vtv-zoom', String(this._zoom));
         const [top, right, bottom, left] = this._padding.map((side) => side * this._zoom);
         // (the gutter: another term of the left inset, inside the padding, as the control's -- and the text's maximum
         // width is the text's, so the gutter widens the page rather than narrowing the text)
@@ -896,9 +946,8 @@ export class VirtualTextView extends EventTarget {
                     let top;
                     if (box.classList.contains('vtv-collapsed')) {
                         const style = this._paragraphStyle(paragraph.styleId);
-                        const drawn = style.border.some((side) => side > 0) || !!style.style.background;
                         const outer = (element._boxes ? box : element).getBoundingClientRect();
-                        if (!drawn || outer.height < 1.5 * this._gutterLabelHeight) continue;
+                        if (!style.drawn || outer.height < 1.5 * this._gutterLabelHeight) continue;
                         top = outer.top - page + (outer.height - this._gutterLabelHeight) / 2;
                     } else {
                         top = box._base.getBoundingClientRect().top - page - this._gutterBaseline;
@@ -1124,9 +1173,9 @@ export class VirtualTextView extends EventTarget {
     _buildParagraph(paragraph) {
         const style = this._paragraphStyle(paragraph.styleId);
         const outer = el('div', 'vtv-para');
-        outer.style.cssText = style.outerCss;
-        const box = el('div', 'vtv-box');
-        box.style.cssText = style.boxCss;
+        if (style.outerCss) outer.style.cssText = style.outerCss;
+        const box = el('div', style.className ? 'vtv-box ' + style.className : 'vtv-box');
+        if (style.boxCss) box.style.cssText = style.boxCss;
         this._fillBox(box, paragraph, style);
         outer.append(box);
         outer._box = box;
@@ -1155,12 +1204,12 @@ export class VirtualTextView extends EventTarget {
         box.append(box._base);
         let at = 0;
         for (const run of paragraph.runs) {
-            const css = this._runCss(run);
+            const { css, className } = this._runLook(run);
             const pieces = run.hidden || !run.text.includes(SOFT_BREAK) ? [run.text] : run.text.split(BREAKS);
             let offset = at;
             for (const piece of pieces) {
                 if (piece.length === 0) continue;
-                const span = el('span', 'vtv-run');
+                const span = el('span', className ? 'vtv-run ' + className : 'vtv-run');
                 if (run.hidden) span.classList.add('vtv-hidden');
                 if (piece === SOFT_BREAK) span.classList.add('vtv-br');
                 if (run.link) {
@@ -1236,9 +1285,12 @@ export class VirtualTextView extends EventTarget {
         if (stale) {
             wrap = el('div', 'vtv-para vtv-table-wrap');
             const tableStyle = this._styleProvider?.getTableStyle?.(table) ?? {};
-            const margin = sides(tableStyle.margin ?? [8, 0, 8, 0]).map((side) => side * this._zoom + 'px');
-            wrap.style.cssText = `padding:${margin.join(' ')};`;
-            const element = el('table', 'vtv-table');
+            // (a table of the host's stylesheet has its class, its margins in it; the wrapper holds them in)
+            const element = el('table', tableStyle.className ? 'vtv-table ' + tableStyle.className : 'vtv-table');
+            if (!tableStyle.className) {
+                const margin = sides(tableStyle.margin ?? [8, 0, 8, 0]).map((side) => side * this._zoom + 'px');
+                wrap.style.cssText = `padding:${margin.join(' ')};`;
+            }
             if (tableStyle.css) Object.assign(element.style, tableStyle.css);
             let row = null, rowIndex = -1;
             wrap._boxes = [];
@@ -1248,11 +1300,13 @@ export class VirtualTextView extends EventTarget {
                     element.append(row);
                     rowIndex = paragraph.cell.row;
                 }
-                const td = el('td', '');
+                const td = el('td', tableStyle.cellClassName ?? '');
                 if (tableStyle.cellCss) td.style.cssText = tableStyle.cellCss;
                 const style = this._paragraphStyle(paragraph.styleId);
-                const box = el('div', 'vtv-box');
-                box.style.cssText = style.boxCss + (paragraph.cell.align ? `text-align:${paragraph.cell.align};` : '');
+                const box = el('div', style.className ? 'vtv-box ' + style.className : 'vtv-box');
+                if (style.boxCss) box.style.cssText = style.boxCss;
+                const align = paragraph.cell.align;
+                if (align === 'left' || align === 'center' || align === 'right') box.classList.add('vtv-align-' + align);
                 this._fillBox(box, paragraph, style);
                 td.append(box);
                 row.append(td);
@@ -1307,7 +1361,7 @@ export class VirtualTextView extends EventTarget {
         const width = rects.reduce((sum, rect) => sum + (rect.right - rect.left), 0);
         const style = this._paragraphStyle(paragraph.styleId);
         const room = style.margin[3] + style.padding[3] + style.border[3];
-        const indent = (style.style.firstLineIndent ?? 0) * this._zoom - Math.min(width, room);
+        const indent = style.firstLineIndent - Math.min(width, room);
         box.style.textIndent = indent + 'px';
     }
 
@@ -1808,7 +1862,7 @@ export class VirtualTextView extends EventTarget {
         if (rect) {
             const style = this.caret ? this._paragraphStyle(this.paragraphs[this.caret.paragraph].styleId) : null;
             this.composition.style.cssText = `display:block;left:${rect.left}px;top:${rect.top}px;` +
-                (style ? style.boxCss.replace(/padding:[^;]*;|border-width:[^;]*;|background:[^;]*;/g, '') : '');
+                (style ? style.fontCss : '');
             this.composition.textContent = '';
         }
         this.caretElement.style.display = 'none';

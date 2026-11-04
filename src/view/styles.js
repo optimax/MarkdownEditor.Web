@@ -6,10 +6,13 @@
 // ParagraphStyle: { name, fontFamily, fontSize (px), bold, italic, color, background, underline, strikethrough,
 //   lineHeight (a multiple of the font size), textAlign, margin, padding, borderWidth, borderColor, borderStyle,
 //   borderRadius (each of the four a number or [top, right, bottom, left]), firstLineIndent, nextStyleId, hidden,
-//   css (more CSS for the paragraph's box, as { property: value }) }
+//   css (more CSS for the paragraph's box, as { property: value }) } -- or { name, className, nextStyleId, hidden }:
+//   the look is then the host's stylesheet's, for the class, and the rest is not used.
 // CharacterStyle: { fontFamily, fontSize, bold, italic, color, background, underline, strikethrough,
-//   script ('sub' | 'super'), hidden, css }
-// DocumentStyle: { maxWidth, placement ('left' | 'center'), background, color, selectionColor, caretColor,
+//   script ('sub' | 'super'), hidden, css, className (classes of the host's stylesheet, beside the rest) }
+// DocumentStyle: { className (classes the view's host element gets: what the stylesheet's rules for the content are
+//   under), variables (CSS custom properties set on it, { '--name': value }), maxWidth, placement ('left' | 'center'),
+//   background, color, selectionColor, caretColor,
 //   highlightColor, currentLineColor (a band behind the caret's line; none by default), gutter: { fontFamily,
 //   fontSize, bold, color (the numbers'), namesColor (the style names'; the numbers' color by default), background,
 //   borderColor (a line between the gutter and the text) } }
@@ -62,11 +65,20 @@ function decorations(underline, strikethrough) {
 /**
  * A paragraph style resolved to what the view draws: the CSS of the outer element (the margin, as padding, so that
  * margins add and never collapse) and of the box (font, colors, border, padding), and the numbers layout estimates with.
+ *
+ * A style with a `className` is the host's stylesheet's: the box gets the class and no CSS of its own, and the numbers
+ * are read from the box as the browser styles it (`computed`, a CSSStyleDeclaration's values, read by the view off a
+ * probe of the class; its margins are the box's own, which the outer element, a block formatting context, holds in).
  */
 export class ResolvedParagraphStyle {
-    constructor(style, zoom = 1) {
+    constructor(style, zoom = 1, computed = null) {
         const s = { ...DEFAULT_PARAGRAPH_STYLE, ...(style ?? {}) };
         this.style = s;
+        this.className = typeof s.className === 'string' ? s.className.trim() : '';
+        if (computed) {
+            this._fromComputed(computed);
+            return;
+        }
         const fontSize = s.fontSize * zoom;
         const margin = sides(s.margin).map((side) => side * zoom);
         const padding = sides(s.padding).map((side) => side * zoom);
@@ -90,8 +102,39 @@ export class ResolvedParagraphStyle {
             (s.background ? `background:${s.background};` : '') +
             (s.firstLineIndent ? `text-indent:${s.firstLineIndent * zoom}px;` : '') +
             extraCss(s.css);
+        this.firstLineIndent = (s.firstLineIndent || 0) * zoom;
+        this.drawn = border.some((side) => side > 0) || !!s.background; // (a box that can be seen with nothing in it)
+        this.fontCss = `font-family:${s.fontFamily};font-size:${fontSize}px;line-height:${s.lineHeight};` +
+            `font-weight:${s.bold ? 700 : 400};font-style:${s.italic ? 'italic' : 'normal'};color:${s.color};`;
+    }
+
+    _fromComputed(c) {
+        const n = (value) => parseFloat(value) || 0;
+        const fontSize = n(c.fontSize);
+        this.fontSize = fontSize;
+        this.lineHeight = c.lineHeight === 'normal' || !c.lineHeight ? fontSize * 1.2 : Math.max(1, n(c.lineHeight));
+        this.margin = [n(c.marginTop), n(c.marginRight), n(c.marginBottom), n(c.marginLeft)];
+        this.padding = [n(c.paddingTop), n(c.paddingRight), n(c.paddingBottom), n(c.paddingLeft)];
+        this.border = [n(c.borderTopWidth), n(c.borderRightWidth), n(c.borderBottomWidth), n(c.borderLeftWidth)];
+        const [margin, padding, border] = [this.margin, this.padding, this.border];
+        this.vertical = margin[0] + margin[2] + padding[0] + padding[2] + border[0] + border[2];
+        this.horizontal = margin[1] + margin[3] + padding[1] + padding[3] + border[1] + border[3];
+        this.hidden = !!this.style.hidden;
+        this.outerCss = '';
+        this.boxCss = '';
+        this.firstLineIndent = n(c.textIndent);
+        const clear = !c.backgroundColor || /^(transparent|rgba\(0, 0, 0, 0\))$/.test(c.backgroundColor);
+        this.drawn = this.border.some((side) => side > 0) || !clear || (c.backgroundImage ?? 'none') !== 'none';
+        this.fontCss = `font-family:${c.fontFamily};font-size:${c.fontSize};line-height:${c.lineHeight};` +
+            `font-weight:${c.fontWeight};font-style:${c.fontStyle};color:${c.color};`;
     }
 }
+
+/** What `ResolvedParagraphStyle` reads of a box the host's stylesheet styles (copied: a computed style is live). */
+export const COMPUTED_PROPERTIES = ['fontSize', 'lineHeight', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+    'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderTopWidth', 'borderRightWidth',
+    'borderBottomWidth', 'borderLeftWidth', 'textIndent', 'backgroundColor', 'backgroundImage', 'fontFamily',
+    'fontWeight', 'fontStyle', 'color'];
 
 /** A character style resolved to the CSS of a run (only what the style has an opinion of). */
 export function characterCss(style, zoom = 1) {

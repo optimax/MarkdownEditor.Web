@@ -1,11 +1,19 @@
 // The look of a Markdown document: what each paragraph and character style ID of the projection stands for. The web
-// counterpart of MaxPad.Projection's MarkdownStyleProvider (its colors and proportions), driven by a theme a page can
-// give in part: { fontFamily, fontSize, codeFontFamily, color, background, headingColor, linkColor, syntaxColor,
-// quietColor, codeBackground, codeFrameColor, inlineCodeBackground, quoteBarColor, ruleColor, tableBorderColor,
-// tableHeaderBackground, selectionColor, caretColor, highlightColor, documentWidth, centered, listIndent,
-// paragraphSpacing, headingLines, paragraphNumberColor, paragraphTypeColor, gutterFontSize, currentLineColor }.
+// counterpart of MaxPad.Projection's MarkdownStyleProvider. The look itself is a stylesheet (stylesheet.js): each style
+// is classes of it (`mde-content-...`), which a page's own stylesheet may restyle (2026-11-03, the user: the styles are
+// to be "applied consistently through a stylesheet that the host supplies").
+//
+// A theme is 'light', 'dark', or an object of values over one of them ({ base: 'dark', ... } over the dark one):
+// { fontFamily, fontSize, codeFontFamily, color, background, headingColor, linkColor, syntaxColor, quietColor,
+// htmlColor, codeBackground, codeFrameColor, inlineCodeBackground, quoteBarColor, ruleColor, tableBorderColor,
+// tableHeaderBackground, selectionColor, caretColor, highlightColor, currentLineColor, documentWidth, centered,
+// listIndent, paragraphSpacing, headingLines, paragraphNumberColor, paragraphTypeColor, gutterFontSize }. The dark
+// one is the stylesheet's class `mde-dark`; the values a page gives are the stylesheet's custom properties
+// (`--mde-heading-color`, ...) on the content, except for the width, the centering and the gutter's font size, which
+// the view is given.
 
 import { parseStyleId } from './projection.js';
+import { injectMarkdownStylesheet, STYLE_DEPTH_LIMIT } from './stylesheet.js';
 
 export const LIGHT_THEME = Object.freeze({
     fontFamily: '"Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", sans-serif',
@@ -28,6 +36,7 @@ export const LIGHT_THEME = Object.freeze({
     selectionColor: 'rgba(51, 144, 255, 0.28)',
     caretColor: '#000000',
     highlightColor: 'rgba(255, 213, 0, 0.45)',
+    currentLineColor: '#fffbdd',
     documentWidth: 860,
     centered: true,
     listIndent: 28,
@@ -57,212 +66,117 @@ export const DARK_THEME = Object.freeze({
     selectionColor: 'rgba(90, 160, 255, 0.35)',
     caretColor: '#ffffff',
     highlightColor: 'rgba(255, 200, 0, 0.35)',
+    currentLineColor: '#2b2d24',
     paragraphNumberColor: '#d68bd0',
     paragraphTypeColor: '#6fbf6a',
 });
 
-const HEADING_SCALE = [2.0, 1.6875, 1.4375, 1.25, 1.125, 1.0625];
-const QUOTE_STEP = 14, QUOTE_BAR = 3;
+// The theme's values that are the stylesheet's custom properties as they are (colors and fonts): --mde-<name>.
+const PROPERTY_KEYS = new Set(['fontFamily', 'codeFontFamily', 'color', 'background', 'headingColor', 'linkColor',
+    'syntaxColor', 'quietColor', 'htmlColor', 'codeBackground', 'codeFrameColor', 'inlineCodeBackground',
+    'quoteBarColor', 'ruleColor', 'tableBorderColor', 'tableHeaderBackground', 'selectionColor', 'caretColor',
+    'highlightColor', 'currentLineColor', 'paragraphNumberColor', 'paragraphTypeColor']);
 
-const checkbox = (checked, color) => {
-    const stroke = encodeURIComponent(color);
-    const tick = checked ? `<path d='M3.5 8.5l3 3 6-7' fill='none' stroke='${stroke}' stroke-width='2'/>` : '';
-    return `url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>` +
-        `<rect x='1.5' y='1.5' width='13' height='13' rx='2.5' fill='none' stroke='${stroke}' stroke-width='1.4'/>` +
-        `${tick}</svg>")`;
+// Each kind of paragraph: its name (the gutter shows it) and its classes.
+const KINDS = {
+    p: ['Paragraph', 'mde-content-p'],
+    blank: ['Empty paragraph', 'mde-content-blank'],
+    bullet: ['Bullet', 'mde-content-bullet'],
+    list: ['List', 'mde-content-numbered'],
+    check: ['Check', 'mde-content-task'],
+    image: ['Image', 'mde-content-image'],
+    hr: ['Rule', 'mde-content-rule'],
+    code: ['Code', 'mde-content-code-block'],
+    'code-indented': ['Code', 'mde-content-code-block mde-content-code-indented'],
+    'code-fence': ['Code fence', 'mde-content-code-fence'],
+    'code-fence-close': ['Code fence', 'mde-content-code-fence mde-content-code-fence-close'],
+    html: ['HTML', 'mde-content-html-block'],
+    definition: ['Definition', 'mde-content-definition'],
+    other: ['Other', 'mde-content-other'],
+    'front-matter': ['Front matter', 'mde-content-front-matter'],
+    'front-matter-fence': ['Front matter fence', 'mde-content-front-matter mde-content-front-matter-fence'],
+    'table-header': ['Table header', 'mde-content-table-header'],
+    'table-cell': ['Table row', 'mde-content-table-cell'],
+};
+
+// Each name of a character style ID (its names joined by '+'): its class.
+const RUNS = {
+    code: 'mde-content-code', underline: 'mde-content-underline', strike: 'mde-content-strike', sub: 'mde-content-sub',
+    sup: 'mde-content-sup', html: 'mde-content-html', syntax: 'mde-content-syntax',
+    'rule-syntax': 'mde-content-rule-syntax', concealed: 'mde-content-concealed', task: 'mde-content-task-box',
+    'task-done': 'mde-content-task-box mde-content-task-done',
 };
 
 export class MarkdownStyleProvider {
-    constructor(theme = {}) {
-        this.theme = { ...LIGHT_THEME, ...theme };
+    constructor(theme = 'light') {
+        injectMarkdownStylesheet();
+        this.setTheme(theme);
+    }
+
+    /**
+     * The theme: 'light', 'dark', or an object of values over the light one (over the dark one with `base: 'dark'`).
+     * `theme` is then the whole of it, its values (what the editor's frame is drawn in).
+     */
+    setTheme(theme) {
+        const given = theme && typeof theme === 'object' ? theme : {};
+        this.dark = theme === 'dark' || given.base === 'dark';
+        this.overrides = Object.fromEntries(Object.entries(given).filter(([key, value]) => key !== 'base' && value != null));
+        this.theme = { ...(this.dark ? DARK_THEME : LIGHT_THEME), ...this.overrides };
     }
 
     getDocumentStyle() {
         const t = this.theme;
         return {
+            className: this.dark ? 'mde-content mde-dark' : 'mde-content',
+            variables: themeVariables(this.overrides),
             maxWidth: t.documentWidth > 0 ? t.documentWidth : Infinity, placement: t.centered ? 'center' : 'left',
-            background: t.background, color: t.color, selectionColor: t.selectionColor, caretColor: t.caretColor,
-            highlightColor: t.highlightColor,
+            background: 'var(--mde-background)', color: 'var(--mde-color)', selectionColor: 'var(--mde-selection-color)',
+            caretColor: 'var(--mde-caret-color)', highlightColor: 'var(--mde-highlight-color)',
             gutter: {
-                fontFamily: t.fontFamily, fontSize: t.gutterFontSize, color: t.paragraphNumberColor,
-                namesColor: t.paragraphTypeColor,
+                fontFamily: t.fontFamily, fontSize: t.gutterFontSize, color: 'var(--mde-paragraph-number-color)',
+                namesColor: 'var(--mde-paragraph-type-color)',
             },
         };
     }
 
     getHyperlinkStyle() {
-        return { color: this.theme.linkColor, underline: true };
+        return { className: 'mde-content-link' };
     }
 
     getTableStyle() {
-        const t = this.theme;
-        return { margin: [10, 0, 14, 0], cellCss: `border:1px solid ${t.tableBorderColor};`, css: { minWidth: '30%' } };
+        return { className: 'mde-content-table', cellClassName: 'mde-content-td' };
     }
 
+    /**
+     * A paragraph's style: its name, and its classes -- `mde-content-para`, its kind's (`mde-content-h2`,
+     * `mde-content-bullet`...), and in quotes and lists `mde-content-in-quote` and `mde-content-q<depth>`,
+     * `mde-content-in-list` and `mde-content-l<depth>`.
+     */
     getParagraphStyle(styleId) {
-        const t = this.theme;
         const { kind, quotes, lists } = parseStyleId(styleId ?? 'p');
-        let style = this.builtIn(kind);
-        if (kind === 'p') style.name = plainName(quotes, lists);
-        if (quotes > 0 || lists > 0) {
-            const quoteRoom = quotes * QUOTE_STEP;
-            const listRoom = lists * t.listIndent;
-            const [top, right, bottom, left] = sides4(style.padding);
-            style = {
-                ...style,
-                padding: [top, right, bottom, left + quoteRoom + listRoom],
-                color: quotes > 0 && !isCode(kind) ? t.quietColor : style.color,
-            };
-            if (quotes > 0) {
-                // (a bar at the left of each quote the paragraph is in)
-                const stops = [];
-                for (let q = 0; q < quotes; q++) {
-                    const x = q * QUOTE_STEP;
-                    stops.push(`transparent ${x}px`, `${t.quoteBarColor} ${x}px`, `${t.quoteBarColor} ${x + QUOTE_BAR}px`,
-                        `transparent ${x + QUOTE_BAR}px`);
-                }
-                const bars = `linear-gradient(to right, ${stops.join(', ')}) left top / ${quotes * QUOTE_STEP}px 100% no-repeat`;
-                style.css = { ...(style.css ?? {}), background: style.background ? `${bars}, ${style.background}` : bars };
-                style.background = null;
-            }
-        }
+        const heading = /^h([1-6])$/.exec(kind);
+        let [name, className] = KINDS[kind] ?? KINDS.p;
+        if (heading) [name, className] = ['Heading ' + heading[1], `mde-content-heading mde-content-${kind}`];
+        if (kind === 'p') name = plainName(quotes, lists);
+        const classes = ['mde-content-para', className];
+        if (quotes > 0) classes.push('mde-content-in-quote', `mde-content-q${Math.min(quotes, STYLE_DEPTH_LIMIT)}`);
+        if (lists > 0) classes.push('mde-content-in-list', `mde-content-l${Math.min(lists, STYLE_DEPTH_LIMIT)}`);
+        const style = { name, className: classes.join(' ') };
+        if (heading) style.nextStyleId = 'p';
         return style;
-    }
-
-    builtIn(kind) {
-        const t = this.theme;
-        const body = { name: 'Paragraph', fontFamily: t.fontFamily, fontSize: t.fontSize, color: t.color, margin: [0, 0, 6, 0] };
-        const code = (name, color) => ({
-            ...body, name, fontFamily: t.codeFontFamily, fontSize: Math.round(t.fontSize * 0.875 * 10) / 10, color,
-            background: t.codeBackground, padding: [0, 12, 0, 12], margin: 0, lineHeight: 1.45,
-        });
-        const frame = t.codeFrameColor;
-        switch (kind) {
-            case 'p':
-                return { ...body, margin: [0, 0, t.paragraphSpacing, 0] };
-            case 'blank':
-                return { ...body, name: 'Empty paragraph', margin: [0, 0, t.paragraphSpacing, 0] };
-            case 'bullet':
-                return { ...body, name: 'Bullet' };
-            case 'list':
-                return { ...body, name: 'List' };
-            case 'check':
-                return { ...body, name: 'Check' };
-            case 'image':
-                return { ...body, name: 'Image', textAlign: 'center', margin: [10, 20, 10, 20] };
-            case 'hr':
-                return {
-                    ...body, name: 'Rule', fontSize: 2, lineHeight: 1, margin: [12, 0, 12, 0], borderWidth: [0, 0, 2, 0],
-                    borderColor: t.ruleColor,
-                };
-            case 'code':
-                return { ...code('Code', t.color), borderWidth: [0, 1, 0, 1], borderColor: frame };
-            case 'code-indented':
-                return { ...code('Code', t.color) };
-            case 'code-fence':
-                return {
-                    ...code('Code fence', t.quietColor), borderWidth: [1, 1, 0, 1], borderColor: frame, padding: [6, 12, 0, 12],
-                    margin: [4, 0, 0, 0], borderRadius: [4, 4, 0, 0],
-                };
-            case 'code-fence-close':
-                return {
-                    ...code('Code fence', t.quietColor), borderWidth: [0, 1, 1, 1], borderColor: frame, padding: [0, 12, 6, 12],
-                    margin: [0, 0, 10, 0], borderRadius: [0, 0, 4, 4],
-                };
-            case 'html':
-                return { ...code('HTML', t.htmlColor) };
-            case 'definition':
-                return { ...code('Definition', t.quietColor) };
-            case 'other':
-                return { ...code('Other', t.quietColor) };
-            case 'front-matter':
-                return { ...code('Front matter', t.quietColor) };
-            case 'front-matter-fence':
-                return { ...code('Front matter fence', t.quietColor), margin: 0 };
-            case 'table-header':
-                return {
-                    ...body, name: 'Table header', bold: true, background: t.tableHeaderBackground, margin: 0,
-                    padding: [4, 8, 4, 8],
-                };
-            case 'table-cell':
-                return { ...body, name: 'Table row', margin: 0, padding: [4, 8, 4, 8] };
-            default: {
-                const match = /^h([1-6])$/.exec(kind);
-                if (!match) return { ...body, margin: [0, 0, t.paragraphSpacing, 0] };
-                const level = +match[1];
-                const line = t.headingLines[level - 1] ?? 0;
-                return {
-                    ...body, name: 'Heading ' + level, fontSize: Math.round(t.fontSize * HEADING_SCALE[level - 1] * 10) / 10,
-                    bold: true, color: t.headingColor, lineHeight: 1.25, margin: [level <= 2 ? 18 : 14, 0, 8, 0],
-                    padding: [0, 0, line ? 3 : 0, 0], borderWidth: [0, 0, line, 0], borderColor: t.headingColor,
-                    nextStyleId: 'p',
-                };
-            }
-        }
     }
 
     getCharacterStyle(styleId) {
-        const t = this.theme;
-        let style = {};
-        for (const name of styleId.split('+')) {
-            switch (name) {
-                case 'code':
-                    style = {
-                        ...style, fontFamily: t.codeFontFamily, background: t.inlineCodeBackground,
-                        css: { ...(style.css ?? {}), fontSize: '0.92em', borderRadius: '3px', padding: '0 2px' },
-                    };
-                    break;
-                case 'underline':
-                    style = { ...style, underline: true };
-                    break;
-                case 'strike':
-                    style = { ...style, strikethrough: true };
-                    break;
-                case 'sub':
-                    style = { ...style, script: 'sub' };
-                    break;
-                case 'sup':
-                    style = { ...style, script: 'super' };
-                    break;
-                case 'html':
-                    style = { ...style, color: t.htmlColor, fontFamily: t.codeFontFamily };
-                    break;
-                case 'syntax':
-                    style = {
-                        ...style, color: t.syntaxColor, bold: false, italic: false, underline: false, strikethrough: false,
-                    };
-                    break;
-                case 'rule-syntax':
-                    style = { ...style, color: t.syntaxColor, fontSize: t.fontSize };
-                    break;
-                case 'concealed':
-                    style = { ...style, color: 'transparent' };
-                    break;
-                case 'task':
-                    style = {
-                        ...style, fontFamily: t.codeFontFamily, color: 'transparent',
-                        css: { ...(style.css ?? {}), background: `${checkbox(false, t.quietColor)} center / 1.05em no-repeat`,
-                            cursor: 'pointer' },
-                    };
-                    break;
-                case 'task-done':
-                    style = {
-                        ...style, fontFamily: t.codeFontFamily, color: 'transparent',
-                        css: { ...(style.css ?? {}), background: `${checkbox(true, t.linkColor)} center / 1.05em no-repeat`,
-                            cursor: 'pointer' },
-                    };
-                    break;
-                default:
-            }
-        }
-        return style;
+        const classes = styleId.split('+').map((name) => RUNS[name]).filter(Boolean);
+        return { className: classes.join(' ') };
     }
 }
 
 /**
  * The look of the raw Markdown view (MaxPad's RawStyleProvider): the code font, no margins, nothing hidden -- what the file
- * holds is what is drawn -- and a light band behind the caret's line. The width and the centering are the formatted
- * view's (`document`, a MarkdownStyleProvider), so that switching views does not move the text sideways.
+ * holds is what is drawn -- and a light band behind the caret's line (`--mde-current-line-color`). The width and the
+ * centering are the formatted view's (`document`, a MarkdownStyleProvider), so that switching views does not move the
+ * text sideways. Its paragraphs are `mde-content-raw`.
  */
 export class RawStyleProvider {
     constructor(document) {
@@ -274,16 +188,11 @@ export class RawStyleProvider {
     }
 
     getDocumentStyle() {
-        const band = this.theme.currentLineColor ?? (isDarkColor(this.theme.background) ? '#2b2d24' : '#fffbdd');
-        return { ...this.document.getDocumentStyle(), currentLineColor: band };
+        return { ...this.document.getDocumentStyle(), currentLineColor: 'var(--mde-current-line-color)' };
     }
 
     getParagraphStyle() {
-        const t = this.theme;
-        return {
-            name: 'Markdown', fontFamily: t.codeFontFamily, fontSize: Math.round(t.fontSize * 0.94 * 10) / 10, color: t.color,
-            lineHeight: 1.5, margin: 0,
-        };
+        return { name: 'Markdown', className: 'mde-content-raw' };
     }
 
     getCharacterStyle() {
@@ -291,27 +200,27 @@ export class RawStyleProvider {
     }
 }
 
-function isDarkColor(color) {
-    const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(color ?? '');
-    if (!match) return false;
-    const [r, g, b] = match.slice(1).map((hex) => parseInt(hex, 16));
-    return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+// The custom properties of the values a page gave its theme: the colors and the fonts as they are, the sizes in px
+// (the base size as it is, the others scaled by the zoom as the stylesheet's em are).
+function themeVariables(values) {
+    const variables = {};
+    for (const [key, value] of Object.entries(values)) {
+        if (PROPERTY_KEYS.has(key)) variables['--mde-' + kebab(key)] = String(value);
+        else if (key === 'fontSize') variables['--mde-font-size'] = `${value}px`;
+        else if (key === 'listIndent' || key === 'paragraphSpacing') {
+            variables['--mde-' + kebab(key)] = `calc(${value}px * var(--mde-zoom))`;
+        } else if (key === 'headingLines' && Array.isArray(value)) {
+            value.forEach((width, i) => (variables[`--mde-h${i + 1}-line`] = `calc(${width}px * var(--mde-zoom))`));
+        }
+    }
+    return variables;
 }
+
+const kebab = (name) => name.replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase());
 
 // What a plain paragraph is called (the gutter's names show it): by what it is in, as MaxPad's. (One directly in a list
 // item is a Bullet, a List or a Check; a "Quote item" is one in a quote and a list both.)
 function plainName(quotes, lists) {
     if (quotes > 0) return lists > 0 ? 'Quote item' : 'Quote';
     return lists > 0 ? 'List item' : 'Paragraph';
-}
-
-const isCode = (kind) => kind.startsWith('code') || kind === 'html' || kind === 'front-matter';
-
-function sides4(value) {
-    if (Array.isArray(value)) {
-        const [top = 0, right = top, bottom = top, left = right] = value;
-        return [top, right, bottom, left];
-    }
-    const side = value ?? 0;
-    return [side, side, side, side];
 }

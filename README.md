@@ -153,6 +153,22 @@ A theme object overrides any of `LIGHT_THEME`'s values: `fontFamily`, `fontSize`
 `codeBackground`, `quoteBarColor`, `documentWidth`, `centered`, `listIndent` and the rest
 (see `src/markdown/styleProvider.js`). Give `base: 'dark'` to start from the dark theme.
 
+**Restyling the content with your own stylesheet.** The text is styled by classes of the
+editor's default stylesheet, which sits in the CSS cascade layer `mde`: a rule of your own
+stylesheet wins over it whatever its specificity, so you restyle only what you want. Each
+paragraph is `mde-content-para` and its kind's (`mde-content-p`, `mde-content-h1` to `-h6`,
+`mde-content-bullet`, `mde-content-code-block`, `mde-content-table-cell`...); runs are
+`mde-content-code`, `mde-content-link`, `mde-content-strike`... The theme's values are custom
+properties on `.mde-content` (`--mde-heading-color`, `--mde-link-color`, `--mde-font-size`...),
+and the dark theme is `.mde-content.mde-dark`. Give sizes in `em` to have them zoom with the
+text (section 10 of `documents/implementation.md` lists every class).
+
+```css
+.mde-content-h1 { font-size: 2.4em; color: #8b0000; }
+.mde-content { --mde-link-color: #2e7d32; }
+.mde-content-code { border: 1px solid #ccc; }
+```
+
 ## Keys
 
 | Keys | What they do |

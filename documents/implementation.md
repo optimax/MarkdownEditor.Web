@@ -47,7 +47,8 @@ src/
     history.js          undo and redo of the source
     controller.js       the loop between source, projection and view
     rawView.js          the raw Markdown view: the source edited in place
-    styleProvider.js    the default look, its themes, the raw view's look
+    styleProvider.js    the styles as classes, the themes, the raw view's
+    stylesheet.js       the default stylesheet (the look), in a CSS layer
 demo/                   the editor, the element in a form, TinyPad
 test/                   a browser test runner and the tests
 tools/serve.ps1         a local web server for the demos and tests
@@ -61,7 +62,7 @@ How they map to MarkdownTools:
 | `markdown/parser.js`, `inlines.js` | `MaxPad.Dom` (Markdig's tree there) |
 | `markdown/projection.js` | `MaxPad.Projection` (`MarkdownProjection`, `InlineWalker`) |
 | `markdown/commands.js`, `formatting.js`, `history.js`, `controller.js` | `MaxPad.Editing` |
-| `markdown/styleProvider.js` | `MaxPad.Projection`'s `MarkdownStyleProvider` and `RawStyleProvider` |
+| `markdown/styleProvider.js`, `stylesheet.js` | `MaxPad.Projection`'s `MarkdownStyleProvider` and `RawStyleProvider` (a stylesheet here, classes for the styles) |
 | `markdown/rawView.js` | `MaxPad.Projection`'s `RawView`, `MaxPad`'s `RawModeService` |
 | `markdown/blocks.js` | `MaxPad`'s `ParagraphService` |
 | `MarkdownEditor.js`, `element.js` | `MaxPad` (the window) |
@@ -146,10 +147,15 @@ A style provider is an object with any of `getParagraphStyle(id)`,
   (a multiple of the size), alignment, `margin`, `padding`, `borderWidth`, `borderColor`,
   `borderStyle`, `borderRadius` (a number or `[top, right, bottom, left]`), first-line
   indent, `nextStyleId` (the style Enter at a paragraph's end gives the next one), `hidden`,
-  and `css` (more CSS for the paragraph's box).
+  and `css` (more CSS for the paragraph's box). Or, for a host with a stylesheet, `{ name,
+  className, nextStyleId, hidden }`: the look is then the stylesheet's (below).
 - **Character style:** only what it overrides: font, size, bold, italic, color, background,
-  decorations, `script` (`'sub'` or `'super'`), and `css`.
-- **Document style:** `maxWidth` and `placement` (the text held to a width, centered or not;
+  decorations, `script` (`'sub'` or `'super'`), and `css`; and `className`, classes of the
+  host's stylesheet. A hyperlink style and a table style (`className` for the `<table>`,
+  `cellClassName` for its cells; or `margin`, `css` and `cellCss`) are the same.
+- **Document style:** `className` (classes the view's host element gets: what a stylesheet's
+  rules for the content are under), `variables` (custom properties set on it), `maxWidth`
+  and `placement` (the text held to a width, centered or not;
   the scroll bar stays at the edge), background, color, the colors of the selection, the
   caret and the highlights, `currentLineColor`: a band behind the caret's line (none by
   default; the raw Markdown view has one, as MaxPad's), and `gutter`: how the gutter's
@@ -161,6 +167,19 @@ element and one for the box, and the numbers that height estimates use. **The ma
 outer element's padding**, never a CSS margin, so that margins add as in the control and never
 collapse, and a paragraph's height is its outer element's height. The view caches a resolved
 style per ID, and the CSS of a character style per ID, until `invalidateStyles()`.
+
+**A style of the host's stylesheet** (a `className`; 2026-11-03, the user: the styles applied
+"consistently through a stylesheet that the host supplies", not on the elements): the box
+gets the classes and no CSS of its own, and so does a run. The numbers the view needs (the
+font size, the line height, the margins, padding and borders, the first-line indent, whether
+the box is drawn, the font for an input method's text) are read off a probe: a hidden box of
+those classes put in the content for a moment (`_computedStyleOf`), once per style ID. The
+margins are then the box's own, CSS margins: the outer element is a block formatting context
+(`display: flow-root`), so they never collapse with a neighbour's and its height holds them.
+With a document style that has classes, a run's bold and italic are classes too
+(`vtv-bold`, `vtv-italic`), and a table cell's alignment always is (`vtv-align-left` ...).
+The view sets the zoom on its host element as `--vtv-zoom`, for a stylesheet that scales by
+it; `invalidateStyles()` (which the zoom calls) reads the styles again.
 
 ### 4.3 The page
 
@@ -174,7 +193,9 @@ host (.vtv)                       the host's element
       .vtv-content                absolute, at the top of the first
                                   paragraph laid out
         .vtv-para                 a paragraph: the margins as padding
+                                  (or the box's margins, held in)
           .vtv-box                font, border, padding, background
+                                  (or a stylesheet's classes)
             .vtv-marker           the drawn list marker
             span.vtv-base         no room: on the first line's baseline
             span.vtv-run ...      a run (a break is a span of its own)
@@ -208,13 +229,14 @@ The view's CSS is put into the page once, from a string in the module.
 
 ### 4.5 Drawing a paragraph
 
-- Each run is a span with its CSS (the character style's, a link's, and its own bold or
-  italic). A line break that is shown is a span holding "\n" (the box is `white-space:
-  pre-wrap`, so it ends the line); one that is hidden is a space.
+- Each run is a span with its CSS or its classes (the character style's, a link's, and its
+  own bold or italic). A line break that is shown is a span holding "\n" (the box is
+  `white-space: pre-wrap`, so it ends the line); one that is hidden is a space.
 - **Hidden text** is drawn at font size 0: it is there, the caret goes through it, and it
   takes no room. This is the WPF control's own way (a near-zero size).
 - A paragraph whose every run is hidden (a code fence out of sight) is **collapsed**: line
-  height 0, so that it takes only its border and padding.
+  height 0, and its contents at font size 0 (not the box itself, so that a stylesheet's
+  sizes in em keep the box's border, padding and margins), so that it takes only those.
 - Every box ends with a zero-width space, so that an empty paragraph has a line and the
   caret a place at the end.
 - Every box starts with an inline block of no size (`.vtv-base`), which sits on the first
@@ -767,29 +789,53 @@ Markdown").
 
 ------
 
-## 10. The look: `styleProvider.js`
+## 10. The look: `styleProvider.js` and `stylesheet.js`
 
-`MarkdownStyleProvider(theme)` resolves the projection's style IDs. Its colors and proportions
-are MaxPad's: headings 2, 1.69, 1.44, 1.25, 1.13 and 1.06 times the body's size, in the
-heading color, with a line under the first ones; code a little smaller, in a code font, on a
-light background; quotes in a quiet color.
+The look is a stylesheet (2026-11-03, the user's answers in TO-DO.md: the editor's own
+stylesheet, which a page restyles only where it wants; sizes in em; the `theme` option kept).
+`MarkdownStyleProvider(theme)` resolves the projection's style IDs to its classes; its colors
+and proportions are MaxPad's: headings 2, 1.69, 1.44, 1.25, 1.13 and 1.06 times the body's
+size, in the heading color, with a line under the first ones; code a little smaller, in a
+code font, on a light background; quotes in a quiet color.
 
-- A paragraph's style is its kind's (`builtIn`), then moved in for the lists (a list's
-  indent, 28 px, a level) and the quotes it is in: each quote level adds 14 px of room and a
-  3 px bar, drawn with a CSS gradient in the box's background so that each level has its own
-  bar.
+- **The default stylesheet** (`MARKDOWN_CSS`, put first in the page's head once by
+  `injectMarkdownStylesheet`) is in the cascade layer `mde`: any rule of a page's own
+  stylesheet, outside a layer, wins over it whatever their specificity.
+- **The classes.** The view's host element is `.mde-content` (`.mde-dark` too in the dark
+  theme). A paragraph is `mde-content-para` and its kind's: `mde-content-p`, `-blank`,
+  `-bullet`, `-numbered`, `-task`, `-image`, `-rule`, `-heading` with `-h1` to `-h6`,
+  `-code-block` (with `-code-indented`), `-code-fence` (with `-code-fence-close`),
+  `-html-block`, `-definition`, `-other`, `-front-matter` (with `-front-matter-fence`),
+  `-table-header`, `-table-cell`; in quotes, `mde-content-in-quote` and `mde-content-q1` to
+  `-q9` (its depth), in lists `mde-content-in-list` and `-l1` to `-l9`. A run's names are
+  `mde-content-code`, `-underline`, `-strike`, `-sub`, `-sup`, `-html`, `-syntax`,
+  `-rule-syntax`, `-concealed`, `-task-box` (with `-task-done`), and a link `-link`. A table
+  is `mde-content-table`, its cells' frames `mde-content-td`. The raw view's paragraphs are
+  `mde-content-raw`.
+- **Sizes in em**, so that the zoom scales them: the content's font size is `--mde-em`, the
+  base size (`--mde-font-size`) times `--mde-zoom` (the view's `--vtv-zoom`). A page's rule in
+  px does not zoom. The indent of the lists and the quotes (28 px and 14 px a level, a 3 px
+  bar for each quote level, drawn with a repeating gradient in the box's background) is the
+  same for every kind of paragraph in them, so it is in `--mde-em`, not in the paragraph's
+  own em: the depth classes set `--mde-quotes` and `--mde-lists`, the left padding is
+  `--mde-pad-left` (a kind's own room) plus those levels, and a kind with room of its own on
+  the left gives it as `--mde-pad-left`.
 - A fenced block of code is one framed box: the opening fence's paragraph has the frame's top
   and round top corners, the closing fence's the bottom, every line of code the sides; the
   fences' padding stays when they are collapsed, so the box has room above and below its
   code.
-- A task's box is its `[ ]` or `[x]` in transparent ink over a drawn check box (an SVG
-  background), so that its three characters stay text.
-- A character style ID is taken apart at `+`, and the styles of its names laid one on the
-  other.
-- **Themes:** `LIGHT_THEME` and `DARK_THEME`, each an object of the values above (fonts, size,
-  colors, `documentWidth`, `centered`, `listIndent`, `paragraphSpacing`, `headingLines`...).
-  A page gives a theme in part, over the light one (or over the dark one, with
-  `base: 'dark'`).
+- A task's box is its `[ ]` or `[x]` in transparent ink over a check box drawn with a CSS
+  mask in the theme's color, so that its three characters stay text.
+- A character style ID is taken apart at `+`, and a run gets the classes of its names; the
+  stylesheet's order lays them one on the other (a link's first).
+- **Themes** (`setTheme`): `'light'`, `'dark'` (the class `mde-dark`, which the stylesheet
+  restyles), or an object of values over one of them (`base: 'dark'`): `LIGHT_THEME` and
+  `DARK_THEME` hold them all (fonts, size, colors, `documentWidth`, `centered`, `listIndent`,
+  `paragraphSpacing`, `headingLines`...). The values a page gives are custom properties on the
+  content (`--mde-heading-color`; sizes in px, scaled by the zoom), which a page's stylesheet
+  may set as well; the width, the centering and the gutter's font size are the view's. The
+  colors the view draws itself (the background, the selection, the caret, the highlights,
+  the current line, the gutter's labels) are `var(--mde-...)`.
 - **The gutter's numbers** are in the body's font at `gutterFontSize` (12) and in
   `paragraphNumberColor`, MaxPad's magenta (#AB2899; a lighter one in the dark theme); its
   **names** in `paragraphTypeColor`, MaxPad's green (#137A10; a lighter one in the dark
@@ -798,11 +844,11 @@ light background; quotes in a quiet color.
   MaxPad's: `Quote item` (in a quote and a list), `Quote`, `List item`, or `Paragraph`. The
   cells of a table's body are `Table row`, the name the gutter shows once for each of its
   rows (2026-11-03, the user).
-- **The raw view's look** (`RawStyleProvider`, MaxPad's): the theme's code font a little
-  smaller than the body, no margins, nothing hidden or styled, and a light band behind the
-  caret's line (the theme's `currentLineColor`, or a light yellow, a dark one in a dark
-  theme). Its width and its centering are the formatted view's, so that switching views does
-  not move the text sideways.
+- **The raw view's look** (`RawStyleProvider`, MaxPad's): `mde-content-raw`, the theme's
+  code font a little smaller than the body, no margins, nothing hidden or styled, and a light
+  band behind the caret's line (`--mde-current-line-color`: a light yellow, a dark one in the
+  dark theme). Its width and its centering are the formatted view's, so that switching views
+  does not move the text sideways.
 
 ------
 
@@ -905,7 +951,7 @@ the suites; `?steps=150` makes the random test longer.
 | `projection.test.js` | blank lines, hidden and shown syntax (`⟦hidden⟧`, `⟨concealed⟩`), styles, list markers, and that every paragraph is its stretch of the source and every position maps to the source and back |
 | `commands.test.js` | each editing rule, the formats and the paragraph types, written with `¦` for the caret and `«...»` for a selection, as MaxPad.Editing.Tests write theirs |
 | `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits, the gutter's numbers (a table's row one, its room taken and given back) and names (outside the numbers, on their line, the host's first, a long one cut) |
-| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them |
+| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); the page's own toolbar buttons; no syntax in a read-only editor |
 | `raw.test.js` | the raw view's paragraphs and its map to the source (every offset there and back); looking that changes nothing; text changed in it as one undo step; no formats in it; the paragraph numbers and types of the two views agreeing, a line's type following its text |
 
 After every command `editor.test.js` checks what MaxPad.Editing.Tests check: the view's

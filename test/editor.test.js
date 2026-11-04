@@ -165,6 +165,45 @@ test('an editor without the focus shows no syntax', async () => {
     equal(shown(), false, 'not focused: hidden');
 });
 
+test('the content is styled by classes of a stylesheet the page can restyle', async () => {
+    const stage = document.getElementById('stage');
+    stage.replaceChildren();
+    const editor = new MarkdownEditor(stage, { markdown: '# Title\n\n> quoted *text* and [a](b)', toolbar: false });
+    const view = editor.view;
+    const box = (selector) => view.content.querySelector(selector);
+    ok(view.host.classList.contains('mde-content'), 'the content is .mde-content');
+    const heading = box('.vtv-box.mde-content-h1');
+    ok(heading && box('.vtv-box.mde-content-in-quote.mde-content-q1'), 'each paragraph has its kind\'s classes');
+    equal([heading.getAttribute('style'), box('.mde-content-link').getAttribute('style')], [null, null],
+        'no CSS of its own');
+    ok(box('.vtv-run.vtv-italic'), 'italic by class');
+    equal(getComputedStyle(heading).fontSize, '32px', 'the default stylesheet');
+    const page = document.createElement('style');
+    page.textContent = '.mde-content-h1 { font-size: 20px; color: rgb(1, 2, 3); }';
+    document.head.append(page);
+    try {
+        editor.view.invalidateStyles();
+        await tick();
+        const restyled = box('.vtv-box.mde-content-h1');
+        equal([getComputedStyle(restyled).fontSize, getComputedStyle(restyled).color], ['20px', 'rgb(1, 2, 3)'],
+            'a page\'s rule wins over the default stylesheet\'s, whatever their specificity');
+        ok(Math.abs(view.heights[0] - restyled.parentElement.getBoundingClientRect().height) < 1, 'and is laid out so');
+    } finally {
+        page.remove();
+    }
+    editor.view.invalidateStyles();
+    editor.zoom = 1.5;
+    await tick();
+    equal(getComputedStyle(box('.vtv-box.mde-content-h1')).fontSize, '48px', 'the zoom scales the em');
+    editor.zoom = 1;
+    editor.theme = { headingColor: 'rgb(4, 5, 6)' };
+    await tick();
+    equal(getComputedStyle(box('.vtv-box.mde-content-h1')).color, 'rgb(4, 5, 6)', 'a theme\'s value is a custom property');
+    editor.theme = 'dark';
+    ok(view.host.classList.contains('mde-dark'), 'the dark theme is a class');
+    equal(view.host.style.getPropertyValue('--mde-heading-color'), '', 'and the values given before are gone');
+});
+
 test('the page\'s own toolbar buttons, and the items it chooses', () => {
     const stage = document.getElementById('stage');
     stage.replaceChildren();
