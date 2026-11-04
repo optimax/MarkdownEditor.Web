@@ -69,6 +69,7 @@ const ICONS = {
     marks: '<path d="M13 4v16"/><path d="M17 4v16"/><path d="M19 4H9.5a4.5 4.5 0 0 0 0 9H13"/>',
     numbers: '<path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="M16 3l-2 18"/>',
     types: '<path d="M4 6h9"/><path d="M4 12h6"/><path d="M4 18h9"/><path d="M16 9l3 3-3 3"/>',
+    outline: '<path d="m4 6 3 3 3-3"/><path d="M13 7h7"/><path d="m5 14 3 3-3 3"/><path d="M13 17h7"/>',
     raw: '<path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/>' +
         '<path d="m10 13-2 2 2 2"/><path d="m14 17 2-2-2-2"/>',
 };
@@ -76,13 +77,13 @@ const ICONS = {
 /** The toolbar's items, in order ('|' a separator): what `toolbar: true` shows. */
 export const DEFAULT_TOOLBAR = ['undo', 'redo', '|', 'block', '|', 'strong', 'em', 'underline', 'strike', 'code', '|',
     'quote', 'bullet', 'number', 'task', 'codeblock', '|', 'link', 'image', 'table', 'rule', '|', 'marks', 'numbers',
-    'types', 'raw'];
+    'types', 'outline', 'raw'];
 
 // (what the raw Markdown view leaves on: the rest of the toolbar formats, which the source shown as it is has none of)
-const RAW_ITEMS = new Set(['undo', 'redo', 'marks', 'numbers', 'types', 'raw']);
+const RAW_ITEMS = new Set(['undo', 'redo', 'marks', 'numbers', 'types', 'outline', 'raw']);
 
 // (the toolbar's switches of the view, which are on in a read-only document too)
-const VIEW_ITEMS = new Set(['marks', 'numbers', 'types', 'raw']);
+const VIEW_ITEMS = new Set(['marks', 'numbers', 'types', 'outline', 'raw']);
 
 const LABELS = {
     undo: 'Undo (Ctrl+Z)', redo: 'Redo (Ctrl+Y)', strong: 'Bold (Ctrl+B)', em: 'Italic (Ctrl+I)', underline: 'Underline (Ctrl+U)',
@@ -91,6 +92,7 @@ const LABELS = {
     codeblock: 'Code block (Ctrl+Alt+C)', link: 'Link (Ctrl+K)', image: 'Picture', table: 'Table',
     rule: 'Horizontal line (Ctrl+Alt+L)', marks: 'Paragraph marks', block: 'Paragraph or heading (Ctrl+0 to Ctrl+6)',
     raw: 'Markdown source (Ctrl+Shift+R)', numbers: 'Paragraph numbers', types: 'Paragraph types',
+    outline: 'Outline marks (fold what a heading heads)',
 };
 
 const BLOCK_OPTIONS = [['paragraph', 'Paragraph'], ['h1', 'Heading 1'], ['h2', 'Heading 2'], ['h3', 'Heading 3'],
@@ -105,7 +107,8 @@ export class MarkdownEditor extends EventTarget {
      *   imageBase (the URL relative pictures are loaded from), openLinks (Ctrl+click opens a link in a new tab; true
      *   by default), prompt (an async function (question, value) asking the user for a link's or a picture's
      *   address; window.prompt by default), rawMode (start in the raw Markdown view), showParagraphNumbers (each
-     *   paragraph's number in a gutter left of the text), showParagraphTypes (each paragraph's type there) }
+     *   paragraph's number in a gutter left of the text), showParagraphTypes (each paragraph's type there),
+     *   showOutline (the marks beside the headings there that fold what they head; true by default) }
      */
     constructor(target, options = {}) {
         super();
@@ -126,7 +129,8 @@ export class MarkdownEditor extends EventTarget {
             styleProvider: this.styles, readOnly: this.options.readOnly, acceptsTab: true,
             showFormattingMarks: this.options.showFormattingMarks, label: this.options.label ?? 'Markdown editor',
             leftGutterContent: (this.options.showParagraphNumbers ? GutterContent.ParagraphNumbers : GutterContent.None) |
-                (this.options.showParagraphTypes ? GutterContent.StyleNames : GutterContent.None),
+                (this.options.showParagraphTypes ? GutterContent.StyleNames : GutterContent.None) |
+                (this.options.showOutline !== false ? GutterContent.Outline : GutterContent.None),
             padding: this.options.padding ?? [16, 24, 24, 24],
         });
         if (this.options.imageBase) this.imageBase = this.options.imageBase;
@@ -301,6 +305,29 @@ export class MarkdownEditor extends EventTarget {
         this._showInGutter(GutterContent.StyleNames, on);
     }
 
+    /**
+     * The outline marks in the gutter (MaxPad's View > Outline Marks): beside each heading with something under it, a
+     * triangle that collapses what it heads, down to the next heading of its level or a higher one, and expands it again.
+     * On by default. Turning them off leaves what is collapsed as it is (`expandAll` shows everything).
+     */
+    get showOutline() {
+        return (this.view.leftGutterContent & GutterContent.Outline) !== 0;
+    }
+
+    set showOutline(on) {
+        this._showInGutter(GutterContent.Outline, on);
+    }
+
+    /** Collapses every heading that has something under it (MaxPad's Collapse All). */
+    collapseAll() {
+        this.view.collapseAll();
+    }
+
+    /** Expands every collapsed heading: the whole document shows (MaxPad's Expand All). */
+    expandAll() {
+        this.view.expandAll();
+    }
+
     _showInGutter(content, on) {
         const shown = this.view.leftGutterContent;
         this.view.leftGutterContent = on ? shown | content : shown & ~content;
@@ -473,6 +500,11 @@ export class MarkdownEditor extends EventTarget {
             case 'types':
                 this.showParagraphTypes = !this.showParagraphTypes;
                 return undefined;
+            case 'outline':
+                this.showOutline = !this.showOutline;
+                return undefined;
+            case 'collapseAll': return this.collapseAll();
+            case 'expandAll': return this.expandAll();
             case 'raw': return this.toggleRawMode();
             default:
                 throw new Error(`MarkdownEditor: no command "${name}".`);
@@ -658,6 +690,7 @@ export class MarkdownEditor extends EventTarget {
             else if (item === 'raw') pressed = raw;
             else if (item === 'numbers') pressed = this.showParagraphNumbers;
             else if (item === 'types') pressed = this.showParagraphTypes;
+            else if (item === 'outline') pressed = this.showOutline;
             if (pressed !== null) button.setAttribute('aria-pressed', String(pressed));
             if (item === 'undo') button.disabled = readOnly || !this.canUndo;
             else if (item === 'redo') button.disabled = readOnly || !this.canRedo;

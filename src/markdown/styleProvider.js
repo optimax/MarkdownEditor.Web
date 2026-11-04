@@ -162,7 +162,10 @@ export class MarkdownStyleProvider {
         if (quotes > 0) classes.push('mde-content-in-quote', `mde-content-q${Math.min(quotes, STYLE_DEPTH_LIMIT)}`);
         if (lists > 0) classes.push('mde-content-in-list', `mde-content-l${Math.min(lists, STYLE_DEPTH_LIMIT)}`);
         const style = { name, className: classes.join(' ') };
-        if (heading) style.nextStyleId = 'p';
+        if (heading) {
+            style.nextStyleId = 'p';
+            style.outlineLevel = +heading[1]; // (a heading heads what follows it: the view's outline folds it)
+        }
         return style;
     }
 

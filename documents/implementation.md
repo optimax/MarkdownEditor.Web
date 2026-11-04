@@ -359,8 +359,9 @@ has the left one, with its paragraph numbers and its style names: MaxPad's View 
 Numbers and View > Paragraph Types.
 
 - **What it shows** is `leftGutterContent`, flags as the control's: `ParagraphNumbers`,
-  `StyleNames`, both, or `GutterContent.None` (the default), when it is not there and takes
-  no room. It is the view's setting, not the document's.
+  `StyleNames`, `Outline` (the outline marks, section 4.11), any of them together, or
+  `GutterContent.None` (the default), when it is not there and takes no room. It is the
+  view's setting, not the document's.
 - **Where it is:** inside the padding, left of the text, with 8 px between it and the text
   (the control's `GutterSpacing`). It is one more term of the left inset (the page's left
   padding and the content's left), so nothing else of the layout knows of it; the text's
@@ -370,7 +371,9 @@ Numbers and View > Paragraph Types.
   least), the names column 96 px (the control's `DefaultNamesColumnWidth`), outside the
   numbers, 10 px between the two (`ColumnGap`), with 6 px either side and the border, as the
   control's. When the count gains a digit, the gutter widens, the text narrows, and every
-  height is measured again (with the numbers shown; the names alone do not care).
+  height is measured again (with the numbers shown; the names alone do not care). The
+  outline marks' column, 16 px (`OutlineColumnWidth`), is the one nearest the text, 4 px
+  (`OutlineGap`) from the others.
 - **The numbers** are the paragraphs' places among the document's blocks, from 1, where a
   table's row is one block: its cells have its first cell's number, and the row's number is
   beside its first cell (`getParagraphNumber`; the count of a row's later cells before each
@@ -396,8 +399,45 @@ Numbers and View > Paragraph Types.
   every number and name written after, so that the page is laid out once and not once a
   label.
 - **Not done:** the right gutter, a fixed width and the other column order (the control's
-  `Width` and `ColumnOrder`), the outline marks, and a host's own drawing in the gutter
-  (`IGutterAdorner`).
+  `Width` and `ColumnOrder`), and a host's own drawing in the gutter (`IGutterAdorner`).
+
+### 4.11 The outline
+
+The WPF control's outline (`VirtualTextView.Outline.cs`; MaxPad's outline marks and its
+Collapse All and Expand All; 2026-11-03, TO-DO "Paragraph Folding").
+
+- **A heading** is a paragraph whose style has an `outlineLevel` (1 and up; a table's cell
+  never is: `getOutlineLevel`). It heads the paragraphs after it down to the next heading of
+  its level or a higher one (a smaller number): lower headings and what they head, tables,
+  pictures. It can be collapsed (`isCollapsible`) when the paragraph after it is in its part.
+- **Collapsed** (`setCollapsed`, `isCollapsed`, `collapseAll`, `expandAll`; `outlinechange`
+  after each change): its part is folded away (`isFolded`): it is not drawn (`_render` skips
+  it, a table whole) and its height is 0 (`_refold`, at the start of every layout: a
+  paragraph folded is measured as 0, one folded no more is estimated again; every other
+  keeps its height). Which paragraphs are folded is worked out again (`_ensureFolds`) when
+  the document or the collapsed headings change; a collapsed heading inside a folded part
+  stays collapsed, and one no longer in the document is forgotten.
+- **A collapsed heading is its paragraph object**, which an edit moves. One an edit replaces
+  (`replaceParagraphs`, as the Markdown controller does at every edit) hands its state on to
+  the paragraph of the replacement with its level and text nearest where it was, or to the
+  one in its place if the replacement is as long and that is a heading (its text was edited:
+  `_handOnCollapsed`). A new document (`setParagraphs`) has none collapsed.
+- **The caret steps over a folded part:** Left, Right, the word moves (`_acrossParagraphs`),
+  Up and Down (`_vertical`), Ctrl+End; the mouse cannot reach it. Collapsing a heading brings
+  a caret or selection end in its part back to the end of the heading's text; a caret the
+  host puts in a folded part (`setCaret`, `select`: an edit's, a link's) opens the headings
+  that fold it (`_revealPosition`), so the caret is never where nothing can be seen.
+- **The marks** (`GutterContent.Outline`), drawn with the other labels after each layout:
+  beside each heading that can be collapsed, a triangle pointing down while its part shows
+  and to the right while it is folded, its side four fifths of the height of the heading's
+  small letters (taken as half its font size; 5 px at least, the column's width at most), its
+  foot on the heading's first baseline, in the gutter's color. It is an element of its own
+  (`.vtv-outline-mark`, the triangle a `clip-path` of its `::after`) that takes the mouse,
+  though the gutter does not: a click turns it, starting no selection and leaving the caret
+  where it is.
+- **The Markdown look** gives the headings their level (`outlineLevel` 1 to 6). The raw view's
+  lines have none, and a new document (the raw view's, or the one it gives back) has nothing
+  collapsed.
 
 ------
 
@@ -861,7 +901,8 @@ provider from the theme and the controller from the Markdown. Options: `markdown
 `revealSyntax`, `revealUnfocused`, `showFormattingMarks`, `imageBase`, `openLinks`,
 `prompt`, `padding`, `label`, `onChange`, `rawMode` (start in the raw Markdown view),
 `showParagraphNumbers` (the gutter's numbers, section 4.10; off by default),
-`showParagraphTypes` (the gutter's names; off by default).
+`showParagraphTypes` (the gutter's names; off by default), `showOutline` (the outline marks,
+section 4.11; on by default, as MaxPad's).
 
 - **The keys** are bound in the view's `keymap`, as MaxPad's where a browser leaves them to a
   page:
@@ -890,8 +931,9 @@ provider from the theme and the controller from the Markdown. Options: `markdown
   the caret in the editor), and a list of paragraph and heading levels. After every change
   and every move of the caret it shows which formats are on, the paragraph's type, and
   whether undo and redo can be done. Its last buttons switch the view: the paragraph marks,
-  the paragraph numbers, the paragraph types and the raw Markdown view, which are on in a
-  read-only document too; while the raw view is on, only undo, redo and those four are on.
+  the paragraph numbers, the paragraph types, the outline marks and the raw Markdown view,
+  which are on in a read-only document too; while the raw view is on, only undo, redo and
+  those five are on.
 - **The page's own buttons** (2026-11-03, the user: custom buttons with SVG glyphs that look
   like the editor's, and the page choosing which of the editor's show): an item of the
   toolbar's list may be an object, `{ name, title, icon, label, onClick, pressed, enabled,
@@ -930,7 +972,7 @@ provider from the theme and the controller from the Markdown. Options: `markdown
   `src` loads a file, and makes the file's folder where its pictures are loaded from.
 - **Attributes:** `theme`, `toolbar` (`"false"` for none, or the names of the items wanted,
   separated by spaces or commas: `"undo redo | strong em"`), `readonly`, `image-base`, `src`,
-  `name`, `paragraph-numbers`, `paragraph-types`.
+  `name`, `paragraph-numbers`, `paragraph-types`, `outline` (`"false"`: no outline marks).
 - **A form field:** it is form-associated (`ElementInternals`): a form submits its Markdown
   under its `name`, and it raises `input` and `change` (bubbling) after each change, and
   `linkclick`.
@@ -950,8 +992,8 @@ the suites; `?steps=150` makes the random test longer.
 | `parser.test.js` | the block structure, lists, quotes, code, HTML, tables, front matter, definitions, line marks, inlines and their offsets |
 | `projection.test.js` | blank lines, hidden and shown syntax (`⟦hidden⟧`, `⟨concealed⟩`), styles, list markers, and that every paragraph is its stretch of the source and every position maps to the source and back |
 | `commands.test.js` | each editing rule, the formats and the paragraph types, written with `¦` for the caret and `«...»` for a selection, as MaxPad.Editing.Tests write theirs |
-| `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits, the gutter's numbers (a table's row one, its room taken and given back) and names (outside the numbers, on their line, the host's first, a long one cut) |
-| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); the page's own toolbar buttons; no syntax in a read-only editor |
+| `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits, the gutter's numbers (a table's row one, its room taken and given back) and names (outside the numbers, on their line, the host's first, a long one cut); the outline (a heading folding what it heads, the caret stepping over it, a heading replaced by its like staying collapsed, a caret put in a fold opening it) |
+| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); a Markdown heading edited and undone staying collapsed; the page's own toolbar buttons; no syntax in a read-only editor |
 | `raw.test.js` | the raw view's paragraphs and its map to the source (every offset there and back); looking that changes nothing; text changed in it as one undo step; no formats in it; the paragraph numbers and types of the two views agreeing, a line's type following its text |
 
 After every command `editor.test.js` checks what MaxPad.Editing.Tests check: the view's
@@ -987,7 +1029,7 @@ not of the time a key takes). Measure timings with the page in sight.
 ## 15. Not done, and differences from MaxPad
 
 - Incremental parsing (section 14).
-- MaxPad's outline, find and replace, stylesheet files (the raw view's too, section 9),
+- MaxPad's outline panel, find and replace, stylesheet files (the raw view's too, section 9),
   spelling and export; code highlighting; drag and drop of text; pasting pictures; table
   commands beyond typing, Tab and Enter.
 - A document whose line endings are a mixture is saved with its first kind.

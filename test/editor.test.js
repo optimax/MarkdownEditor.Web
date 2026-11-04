@@ -204,6 +204,25 @@ test('the content is styled by classes of a stylesheet the page can restyle', as
     equal(view.host.style.getPropertyValue('--mde-heading-color'), '', 'and the values given before are gone');
 });
 
+test('the outline in a Markdown document: a heading edited stays collapsed', async () => {
+    const stage = document.getElementById('stage');
+    stage.replaceChildren();
+    const editor = new MarkdownEditor(stage, { markdown: '# A\n\ntext\n\n## B\n\nmore\n\n# C', toolbar: false });
+    const view = editor.view;
+    ok(editor.showOutline, 'the marks are on by default, as MaxPad\'s');
+    view.setCollapsed(0, true);
+    equal(view.paragraphs.map((_, i) => view.isFolded(i)), [false, true, true, true, false]);
+    editor.select(3);
+    editor.view.input.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: 'x', cancelable: true }));
+    await tick();
+    equal([editor.value, view.isCollapsed(0)], ['# Ax\n\ntext\n\n## B\n\nmore\n\n# C', true], 'typed in: still collapsed');
+    editor.undo();
+    await tick();
+    equal([editor.value.startsWith('# A\n'), view.isCollapsed(0), view.isFolded(3)], [true, true, true], 'and undone');
+    editor.expandAll();
+    ok(!view.isFolded(1));
+});
+
 test('the page\'s own toolbar buttons, and the items it chooses', () => {
     const stage = document.getElementById('stage');
     stage.replaceChildren();

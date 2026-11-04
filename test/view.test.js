@@ -115,6 +115,34 @@ test('style names in the gutter, outside the numbers', () => {
     equal(view.content.getBoundingClientRect().left, left, 'and the room given back');
 });
 
+test('the outline: a heading folds what it heads, and the caret steps over it', () => {
+    const styles = { getParagraphStyle: (id) => (/^h\d$/.test(id ?? '') ? { outlineLevel: +id[1], fontSize: 24 } : {}) };
+    const h = (level, text) => ({ styleId: 'h' + level, runs: [{ text }] });
+    const { view } = makeView([h(1, 'A'), plainParagraph('a1'), h(2, 'B'), plainParagraph('b1'), h(1, 'C'),
+        plainParagraph('c1')], styles);
+    view.leftGutterContent = GutterContent.Outline;
+    const marks = () => [...view.gutter.querySelectorAll('.vtv-outline-mark')].filter((m) => m.style.display !== 'none');
+    equal(marks().map((mark) => mark._index), [0, 2, 4], 'a mark beside each heading with something under it');
+    equal([0, 1, 2, 3, 4].map((i) => view.isCollapsible(i)), [true, false, true, false, true]);
+    marks()[0].click();
+    ok(view.isCollapsed(0), 'a click on the mark collapses its heading');
+    equal([1, 2, 3, 4].map((i) => view.isFolded(i)), [true, true, true, false], 'down to the next heading of its level');
+    equal(view.content.children.length, 3, 'what is folded is not drawn');
+    view.setCaret(pos(0, 1));
+    view._move((p) => view._charMove(p, 1), false, 1);
+    equal(view.caret, pos(4, 0), 'Right steps over the folded part');
+    view._vertical(-1, false);
+    equal(view.caret.paragraph, 0, 'and so does Up');
+    view.replaceParagraphs(0, 1, [h(1, 'A')]);
+    ok(view.isCollapsed(0), 'a heading replaced by its like stays collapsed');
+    view.setCaret(pos(3, 0));
+    ok(!view.isCollapsed(0) && !view.isFolded(3), 'a caret put into a folded part opens it');
+    view.collapseAll();
+    equal([0, 2, 4].map((i) => view.isCollapsed(i)), [true, true, true]);
+    view.expandAll();
+    equal(view.paragraphs.map((_, i) => view.isFolded(i)), [false, false, false, false, false, false]);
+});
+
 test('positions, text and selection', () => {
     const { view } = makeView(['ab', 'cde']);
     view.select(pos(0, 1), pos(1, 2));

@@ -47,6 +47,10 @@ user's answers there): classes `mde-content-...` of a default stylesheet in the 
 custom properties and `mde-dark`. The view still takes style objects (TinyPad). See the
 document's sections 4.2 and 10.
 
+Paragraph folding (2026-11-03, TO-DO "Paragraph Folding"): the control's outline, MaxPad's
+outline marks (`showOutline`, on by default) and Collapse All and Expand All; see the
+document's section 4.11.
+
 Paragraph types in the gutter (2026-11-03, the user: "Add paragraph types to the gutter as
 another option"): the control's `StyleNames`, MaxPad's View > Paragraph Types, left of the
 numbers; `showParagraphTypes` on the editor, off by default; in the raw view each line is
@@ -70,7 +74,7 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Verification
 
-- `test/index.html`: 59 passed, 0 failed (Chrome, in the Claude desktop app's browser).
+- `test/index.html`: 61 passed, 0 failed (Chrome, in the Claude desktop app's browser).
   `?steps=150` ran the random test clean as well.
 - Tried by hand in the browser: typing, the syntax at the caret, Enter in a list and a
   quote, a task's box clicked, a word double-clicked and made bold from the toolbar, the

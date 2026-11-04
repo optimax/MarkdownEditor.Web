@@ -64,6 +64,12 @@ const CSS = `
 .vtv-gutter-name { position: absolute; white-space: nowrap; line-height: normal; overflow: hidden; text-overflow: ellipsis;
   text-align: right; }
 .vtv-base { display: inline-block; width: 0; height: 0; }
+.vtv-outline-mark { position: absolute; pointer-events: auto; cursor: pointer; opacity: 0.75; }
+.vtv-outline-mark:hover { opacity: 1; }
+.vtv-outline-mark::after { content: ''; position: absolute; left: 50%; bottom: 3px; width: var(--vtv-mark);
+  height: var(--vtv-mark); margin-left: calc(var(--vtv-mark) / -2); background: currentColor;
+  clip-path: polygon(0 13%, 100% 13%, 50% 100%); }
+.vtv-outline-mark.vtv-closed::after { clip-path: polygon(6.5% 0, 93.5% 50%, 6.5% 100%); }
 .vtv-current-line { position: absolute; left: 0; right: 0; display: none; }
 .vtv-selection, .vtv-highlight { position: absolute; }
 .vtv-caret { position: absolute; width: 2px; margin-left: -1px; }
@@ -101,12 +107,16 @@ export function keyChord(event) {
 }
 
 /** What a gutter shows (the WPF control's GutterContent, flags: the numbers and the names together, the names outer). */
-export const GutterContent = Object.freeze({ None: 0, ParagraphNumbers: 1, StyleNames: 2 });
+export const GutterContent = Object.freeze({ None: 0, ParagraphNumbers: 1, StyleNames: 2, Outline: 8 });
 
 const GUTTER_PADDING = 6; // (inside the gutter, either side of its numbers)
 const GUTTER_SPACING = 8; // (between the gutter and the text: the control's DefaultGutterSpacing)
 const GUTTER_COLUMN_GAP = 10; // (between the names and the numbers: the control's ColumnGap)
 const GUTTER_NAMES_WIDTH = 96; // (the names' column: the control's DefaultNamesColumnWidth; a longer name ends in ...)
+const OUTLINE_WIDTH = 16; // (the outline marks' column, nearest the text: the control's OutlineColumnWidth)
+const OUTLINE_GAP = 4; // (between it and the numbers or the names: OutlineGap)
+const OUTLINE_MARK_SHARE = 0.8; // (a mark's side: four fifths of the height of the heading's small letters)
+const MIN_OUTLINE_MARK = 5;
 
 /** The text a run shows: a line break inside the paragraph is a line break, unless the run is hidden. */
 const shownText = (text, hidden) => (text.includes(SOFT_BREAK) ? text.replaceAll(SOFT_BREAK, hidden ? ' ' : '\n') : text);
@@ -181,7 +191,12 @@ export class VirtualTextView extends EventTarget {
         this._leftGutterContent = options.leftGutterContent ?? GutterContent.None;
         this._gutterLabels = [];
         this._gutterNames = [];
+        this._gutterMarks = [];
         this._paragraphLabels = options.paragraphLabels ?? null;
+        this._collapsed = new Set(); // (the collapsed headings: their paragraph objects, which edits move)
+        this._collapseStamp = 0;
+        this._folded = null; // (which paragraphs are folded away, by index, when any heading is collapsed)
+        this._foldedSet = new Set(); // (the paragraphs folded when the heights last followed the folds)
         this._zoom = 1;
         this._applyDocumentStyle();
         this._wireInput();
@@ -343,6 +358,9 @@ export class VirtualTextView extends EventTarget {
         if (list.length === 0) list.push(plainParagraph(''));
         this.paragraphs = list;
         this._elements.clear();
+        this._collapsed.clear();
+        this._collapseStamp++;
+        this._foldedSet = new Set();
         this.heights = list.map((_, i) => this._estimateHeight(i));
         this.measured = list.map(() => false);
         this._topsValid = 0;
@@ -388,7 +406,9 @@ export class VirtualTextView extends EventTarget {
         const caretBefore = this.caret, anchorBefore = this.anchor;
         const removed = record ? this.paragraphs.slice(first, first + removeCount).map(cloneParagraph) : null;
         for (const paragraph of this.paragraphs.slice(first, first + removeCount)) this._elements.delete(paragraph);
+        const collapsed = this._collapsedAmong(first, removeCount);
         this.paragraphs.splice(first, removeCount, ...inserted);
+        if (collapsed.length || this._collapsed.size) this._handOnCollapsed(collapsed, first, removeCount, inserted);
         this.heights.splice(first, removeCount, ...inserted.map(() => 0));
         this.measured.splice(first, removeCount, ...inserted.map(() => false));
         for (let i = first; i < first + inserted.length; i++) this.heights[i] = this._estimateHeight(i);
@@ -475,6 +495,7 @@ export class VirtualTextView extends EventTarget {
     /** Puts the caret at `position` (clamped), with no selection, and scrolls it into view. */
     setCaret(position, { scroll = true } = {}) {
         const clamped = this._clamp(position);
+        this._revealPosition(clamped);
         this.caret = this.anchor = clamped;
         this.affinity = 'forward';
         this._caretMoved(scroll);
@@ -484,6 +505,8 @@ export class VirtualTextView extends EventTarget {
     select(anchor, active, { scroll = true } = {}) {
         this.anchor = this._clamp(anchor);
         this.caret = this._clamp(active);
+        this._revealPosition(this.anchor);
+        this._revealPosition(this.caret);
         this._caretMoved(scroll);
     }
 
@@ -842,14 +865,15 @@ export class VirtualTextView extends EventTarget {
 
     // Styles the gutter and gives its width (0 when it shows nothing), as the control's: its numbers' column is as wide
     // as the number of paragraphs has digits (two at least), its names' column GUTTER_NAMES_WIDTH, outside the numbers,
-    // with a gap between the two and room either side.
+    // with a gap between the two and room either side; the outline marks' column, OUTLINE_WIDTH, is nearest the text.
     _styleGutter(look, left) {
         const gutter = this.gutter;
         this._gutterDigits = this._digitsOfCount();
         this._gutterBaseline = null; // (measured again when it is drawn: the font may have changed)
         const numbers = (this._leftGutterContent & GutterContent.ParagraphNumbers) !== 0;
         const names = (this._leftGutterContent & GutterContent.StyleNames) !== 0;
-        if (!numbers && !names) {
+        const outline = (this._leftGutterContent & GutterContent.Outline) !== 0;
+        if (!numbers && !names && !outline) {
             gutter.style.display = 'none';
             return 0;
         }
@@ -862,11 +886,15 @@ export class VirtualTextView extends EventTarget {
         const numbersWidth = numbers ? this._gutterDigits * canvas.measureText('0').width : 0;
         const namesWidth = names ? GUTTER_NAMES_WIDTH * this._zoom : 0;
         const gap = numbers && names ? GUTTER_COLUMN_GAP * this._zoom : 0;
-        const width = Math.ceil(numbersWidth + gap + namesWidth + 2 * GUTTER_PADDING * this._zoom + border);
+        const outlineWidth = outline ? OUTLINE_WIDTH * this._zoom : 0;
+        const outlineTaken = outline ? outlineWidth + (numbers || names ? OUTLINE_GAP * this._zoom : 0) : 0;
+        const width = Math.ceil(numbersWidth + gap + namesWidth + outlineTaken + 2 * GUTTER_PADDING * this._zoom + border);
         gutter.style.cssText = `display:block;left:${left}px;width:${width}px;font:${font};color:${g.color};` +
             (g.background ? `background:${g.background};` : '') +
             (border ? `border-right:1px solid ${g.borderColor};` : '');
-        this._gutterInset = GUTTER_PADDING * this._zoom + border; // (from the gutter's right edge to its numbers)
+        this._outlineInset = GUTTER_PADDING * this._zoom + border; // (from the gutter's right edge to the outline column)
+        this._outlineWidth = outlineWidth;
+        this._gutterInset = this._outlineInset + outlineTaken; // (to its numbers)
         this._namesInset = this._gutterInset + numbersWidth + gap; // (and to its names)
         this._namesWidth = namesWidth;
         this._namesColor = g.namesColor ?? g.color;
@@ -922,13 +950,15 @@ export class VirtualTextView extends EventTarget {
     // sight) has none, so that it writes over no neighbour's -- unless its box is drawn (a border, a background) and its
     // room, margins and all, is half as tall again as a number (a rule): its number then sits in the middle of the room.
     // (all the places are read first and the numbers written after, so that the page is laid out once, not once a number)
-    // The names go on the same lines, beside the numbers (each trimmed to its column, an empty one not drawn).
+    // The names go on the same lines, beside the numbers (each trimmed to its column, an empty one not drawn); a heading
+    // that can be collapsed has its outline mark, nearest the text, its foot on the heading's baseline.
     _drawGutter() {
         const labels = this._gutterLabels;
         const numbers = [];
         const showNumbers = (this._leftGutterContent & GutterContent.ParagraphNumbers) !== 0;
         const showNames = (this._leftGutterContent & GutterContent.StyleNames) !== 0;
-        if (showNumbers || showNames) {
+        const showOutline = (this._leftGutterContent & GutterContent.Outline) !== 0;
+        if (showNumbers || showNames || showOutline) {
             const page = this._pageRect().top;
             if (this._gutterBaseline === null) {
                 const probe = el('div', 'vtv-gutter-label');
@@ -981,6 +1011,242 @@ export class VirtualTextView extends EventTarget {
         }
         for (let k = shownNumbers; k < labels.length; k++) labels[k].style.cssText = 'display:none';
         for (let k = shownNames; k < names.length; k++) names[k].style.cssText = 'display:none';
+        const marks = this._gutterMarks;
+        let shownMarks = 0;
+        for (const { index, top } of showOutline ? numbers : []) {
+            if (!this.isCollapsible(index)) continue;
+            let mark = marks[shownMarks];
+            if (!mark) {
+                mark = el('div', 'vtv-outline-mark');
+                // (a click turns it, and starts no selection; the caret stays where it is)
+                mark.addEventListener('mousedown', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                });
+                mark.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    this.setCollapsed(mark._index, !this.isCollapsed(mark._index));
+                });
+                this.gutter.append(mark);
+                marks.push(mark);
+            }
+            shownMarks++;
+            const collapsed = this.isCollapsed(index);
+            const style = this._paragraphStyle(this.paragraphs[index].styleId);
+            const side = Math.min(Math.max(OUTLINE_MARK_SHARE * 0.5 * style.fontSize, MIN_OUTLINE_MARK * this._zoom),
+                this._outlineWidth);
+            const baseline = top + this._gutterBaseline;
+            mark._index = index;
+            mark.classList.toggle('vtv-closed', collapsed);
+            mark.title = collapsed ? 'Expand' : 'Collapse';
+            mark.style.cssText = `top:${baseline - side - 3}px;height:${side + 6}px;right:${this._outlineInset}px;` +
+                `width:${this._outlineWidth}px;--vtv-mark:${side}px;`;
+        }
+        for (let k = shownMarks; k < marks.length; k++) marks[k].style.cssText = 'display:none';
+    }
+
+    // ---- The outline -----------------------------------------------------------------------------------------------
+    //
+    // The WPF control's outline (VirtualTextView.Outline.cs; MaxPad's outline marks). A heading -- a paragraph whose style
+    // has an `outlineLevel` -- heads the paragraphs after it, down to the next heading of its level or a higher one (a
+    // smaller number): lower headings and what they head, tables and pictures, are its part. A collapsed heading's part
+    // is folded away: it takes no room, is not drawn, and the caret steps over it; a caret put into it by anything but
+    // the caret keys (the host, a click on a link) opens the headings that fold it. A collapsed heading is known by its
+    // paragraph object, and one an edit replaces with a heading of the same level and text hands its state on.
+
+    /** The outline level of paragraph `index`: its style's `outlineLevel` (1 and up for a heading), 0 for any other. */
+    getOutlineLevel(index) {
+        const paragraph = this.paragraphs[index];
+        if (!paragraph || paragraph.cell) return 0;
+        return Math.max(0, Math.floor(this._paragraphStyle(paragraph.styleId).style.outlineLevel ?? 0) || 0);
+    }
+
+    /** Whether paragraph `index` heads a part that can be collapsed: a heading with something under it. */
+    isCollapsible(index) {
+        if (index < 0 || index + 1 >= this.paragraphs.length) return false;
+        const level = this.getOutlineLevel(index);
+        if (level <= 0) return false;
+        const next = this.getOutlineLevel(index + 1);
+        return next <= 0 || next > level;
+    }
+
+    /** Whether the heading at `index` is collapsed. */
+    isCollapsed(index) {
+        return this._collapsed.has(this.paragraphs[index]);
+    }
+
+    /** Whether paragraph `index` is folded away: in the part of a collapsed heading (not the heading, which shows). */
+    isFolded(index) {
+        this._ensureFolds();
+        return !!this._folded?.[index];
+    }
+
+    /**
+     * Collapses the heading at `index` (folding its part away) or expands it; nothing for a paragraph that is no
+     * collapsible heading. A caret or selection end in what is folded comes back to the end of the heading's text.
+     */
+    setCollapsed(index, collapsed) {
+        const heading = this.paragraphs[index];
+        if (!heading || (collapsed && !this.isCollapsible(index))) return;
+        if (!!collapsed === this._collapsed.has(heading)) return;
+        if (collapsed) this._collapsed.add(heading);
+        else this._collapsed.delete(heading);
+        this._collapseStamp++;
+        if (collapsed) {
+            const end = pos(index, paragraphLength(heading));
+            const caretFolded = this.caret && this.isFolded(this.caret.paragraph);
+            const anchorFolded = this.anchor && this.isFolded(this.anchor.paragraph);
+            if (caretFolded) this.caret = end;
+            if (anchorFolded || (caretFolded && !this.anchor)) this.anchor = end;
+            if (caretFolded || anchorFolded) this._selectionChanged();
+        }
+        this._outlineChanged();
+    }
+
+    /** Collapses every heading that has something under it. */
+    collapseAll() {
+        let any = false;
+        for (let i = 0; i < this.paragraphs.length; i++) {
+            if (this.isCollapsible(i) && !this._collapsed.has(this.paragraphs[i])) {
+                this._collapsed.add(this.paragraphs[i]);
+                any = true;
+            }
+        }
+        if (!any) return;
+        this._collapseStamp++;
+        if (this.caret && this.isFolded(this.caret.paragraph)) {
+            const shown = this._shownFrom(this.caret.paragraph, -1);
+            this.caret = this.anchor = pos(shown, paragraphLength(this.paragraphs[shown]));
+            this._selectionChanged();
+        }
+        this._outlineChanged();
+    }
+
+    /** Expands every collapsed heading: the whole document shows. */
+    expandAll() {
+        if (this._collapsed.size === 0) return;
+        this._collapsed.clear();
+        this._collapseStamp++;
+        this._outlineChanged();
+    }
+
+    _outlineChanged() {
+        this._afterHostChange(false);
+        this.dispatchEvent(new Event('outlinechange'));
+    }
+
+    // Works out which paragraphs are folded, if the document or the collapsed headings changed since it last did; a
+    // collapsed heading no longer in the document is forgotten.
+    _ensureFolds() {
+        if (this._collapsed.size === 0) {
+            this._folded = null;
+            return;
+        }
+        const n = this.paragraphs.length;
+        if (this._folded?.length === n && this._foldsKey === `${this._version}:${this._collapseStamp}`) return;
+        const folded = new Uint8Array(n);
+        const present = new Set();
+        let foldLevel = 0; // (the level of the collapsed heading whose part this is; 0 outside any)
+        for (let i = 0; i < n; i++) {
+            const paragraph = this.paragraphs[i];
+            const level = this.getOutlineLevel(i);
+            if (foldLevel > 0) {
+                if (level > 0 && level <= foldLevel) {
+                    foldLevel = 0; // (a heading of the same level or a higher one ends the part)
+                } else {
+                    folded[i] = 1;
+                    if (this._collapsed.has(paragraph)) present.add(paragraph); // (collapsed inside: it stays so)
+                    continue;
+                }
+            }
+            if (level > 0 && this._collapsed.has(paragraph)) {
+                present.add(paragraph);
+                foldLevel = level;
+            }
+        }
+        if (present.size !== this._collapsed.size) this._collapsed = present;
+        this._folded = folded;
+        this._foldsKey = `${this._version}:${this._collapseStamp}`;
+    }
+
+    // The heights follow the folds: a folded paragraph's is 0 (it is measured as that), one that is folded no more is
+    // estimated again and measured when it is laid out. Every other paragraph keeps its height.
+    _refold() {
+        this._ensureFolds();
+        const folded = this._folded;
+        if (!folded && this._foldedSet.size === 0) return;
+        const now = new Set();
+        for (let i = 0; i < this.paragraphs.length; i++) {
+            const paragraph = this.paragraphs[i];
+            if (folded?.[i]) {
+                now.add(paragraph);
+                if (this.heights[i] !== 0 || !this.measured[i]) {
+                    this.heights[i] = 0;
+                    this.measured[i] = true;
+                    this._topsValid = Math.min(this._topsValid, i);
+                }
+            } else if (this._foldedSet.has(paragraph)) {
+                this.measured[i] = false;
+                this.heights[i] = this._estimateHeight(i);
+                this._topsValid = Math.min(this._topsValid, i);
+            }
+        }
+        this._foldedSet = now;
+    }
+
+    // The first paragraph from `index` on (back, for a negative direction) that is not folded away (-1 or the count if
+    // none is).
+    _shownFrom(index, direction) {
+        this._ensureFolds();
+        let i = index;
+        while (i >= 0 && i < this.paragraphs.length && this._folded?.[i]) i += direction < 0 ? -1 : 1;
+        return i;
+    }
+
+    // A position the host puts the caret at is never folded away: the headings that fold it are expanded.
+    _revealPosition(position) {
+        if (!position || this._collapsed.size === 0) return;
+        let guard = this.paragraphs.length;
+        while (this.isFolded(position.paragraph) && guard-- > 0) {
+            for (let j = position.paragraph - 1; j >= 0; j--) {
+                if (this._collapsed.has(this.paragraphs[j]) && !this._folded[j]) {
+                    this._collapsed.delete(this.paragraphs[j]);
+                    this._collapseStamp++;
+                    break;
+                }
+            }
+        }
+    }
+
+    // The collapsed headings among the paragraphs an edit is about to replace: where they are among them, their level
+    // and their text.
+    _collapsedAmong(first, count) {
+        const found = [];
+        if (this._collapsed.size === 0) return found;
+        for (let k = 0; k < count; k++) {
+            const paragraph = this.paragraphs[first + k];
+            if (this._collapsed.has(paragraph)) {
+                found.push({ offset: k, level: this.getOutlineLevel(first + k), text: paragraphText(paragraph) });
+            }
+        }
+        return found;
+    }
+
+    // A collapsed heading replaced stays collapsed: the paragraph of the replacement with its level and text nearest
+    // where it was, or the one in its place if the replacement is as long and that is a heading (it was edited).
+    _handOnCollapsed(collapsed, first, removeCount, inserted) {
+        for (const heading of collapsed) {
+            let to = null;
+            for (let j = 0; j < inserted.length; j++) {
+                if (this.getOutlineLevel(first + j) === heading.level && paragraphText(inserted[j]) === heading.text &&
+                    (to === null || Math.abs(j - heading.offset) < Math.abs(to - heading.offset))) to = j;
+            }
+            if (to === null && inserted.length === removeCount && this.getOutlineLevel(first + heading.offset) > 0) {
+                to = heading.offset;
+            }
+            if (to !== null) this._collapsed.add(inserted[to]);
+        }
+        this._collapseStamp++;
     }
 
     // ---- Layout ---------------------------------------------------------------------------------------------------
@@ -1106,6 +1372,7 @@ export class VirtualTextView extends EventTarget {
             return;
         }
         if (!this.host.isConnected) return;
+        this._refold(); // (the outline: what is folded away takes no room)
         if (this._leftGutterContent & GutterContent.ParagraphNumbers && this._digitsOfCount() !== this._gutterDigits) {
             // (one more digit to the numbers: the gutter is wider, the text narrower, every height to measure again)
             this._applyDocumentStyle();
@@ -1140,6 +1407,10 @@ export class VirtualTextView extends EventTarget {
         const keep = new Set();
         for (let i = first; i <= last; i++) {
             const paragraph = this.paragraphs[i];
+            if (this._folded?.[i]) {
+                if (paragraph.cell) i = this._tableEnd(i); // (a table is folded whole)
+                continue;
+            }
             if (paragraph.cell) {
                 const end = this._tableEnd(i);
                 children.push(this._tableElement(i, end, keep));
@@ -2014,24 +2285,31 @@ export class VirtualTextView extends EventTarget {
         const text = paragraphText(this.paragraphs[p.paragraph]);
         if (direction < 0) {
             if (p.index > 0) return pos(p.paragraph, previousCharacterBoundary(text, p.index));
-            return p.paragraph > 0 ? pos(p.paragraph - 1, paragraphLength(this.paragraphs[p.paragraph - 1])) : p;
+            return this._acrossParagraphs(p, -1);
         }
         if (p.index < text.length) return pos(p.paragraph, nextCharacterBoundary(text, p.index));
-        return p.paragraph + 1 < this.paragraphs.length ? pos(p.paragraph + 1, 0) : p;
+        return this._acrossParagraphs(p, 1);
     }
 
     _wordMove(p, direction) {
         const text = paragraphText(this.paragraphs[p.paragraph]);
         if (direction > 0) {
-            if (p.index >= text.length) return p.paragraph + 1 < this.paragraphs.length ? pos(p.paragraph + 1, 0) : p;
+            if (p.index >= text.length) return this._acrossParagraphs(p, 1);
             return pos(p.paragraph, nextWordBoundary(text, p.index));
         }
-        if (p.index <= 0) return p.paragraph > 0 ? pos(p.paragraph - 1, paragraphLength(this.paragraphs[p.paragraph - 1])) : p;
+        if (p.index <= 0) return this._acrossParagraphs(p, -1);
         return pos(p.paragraph, previousWordBoundary(text, p.index));
     }
 
+    // From a paragraph's edge to the next one's start, or to the previous one's end: over what is folded away.
+    _acrossParagraphs(p, direction) {
+        const next = this._shownFrom(p.paragraph + direction, direction);
+        if (next < 0 || next >= this.paragraphs.length) return p;
+        return direction < 0 ? pos(next, paragraphLength(this.paragraphs[next])) : pos(next, 0);
+    }
+
     _documentEnd() {
-        const last = this.paragraphs.length - 1;
+        const last = Math.max(0, this._shownFrom(this.paragraphs.length - 1, -1));
         return pos(last, paragraphLength(this.paragraphs[last]));
     }
 
@@ -2069,7 +2347,7 @@ export class VirtualTextView extends EventTarget {
             }
         }
         if (!target) {
-            let next = from.paragraph + direction;
+            let next = this._shownFrom(from.paragraph + direction, direction); // (over what is folded away)
             const cell = this.paragraphs[from.paragraph].cell;
             if (cell) {
                 // (in a table: the cell above or below, in the same column; out of the table at its edge)
