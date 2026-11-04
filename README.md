@@ -85,6 +85,7 @@ of one). The options, all optional:
 | `openLinks` | Ctrl+click opens a link in a new tab (`true` by default). |
 | `prompt` | `async (question, value) => answer`: asks for a link's address. |
 | `rawMode` | Start in the raw Markdown view (below). |
+| `showParagraphNumbers` | Each paragraph's number in a gutter left of the text. |
 
 What a page reads and calls:
 
@@ -103,6 +104,8 @@ What a page reads and calls:
 | | `insertImage(url, alt)`. |
 | `execute(name)` | Any toolbar command by name (`'h2'`, `'bullet'`, `'link'`...). |
 | `rawMode`, `toggleRawMode()` | The raw Markdown view on or off (below). |
+| `showParagraphNumbers` | The gutter's paragraph numbers on or off (the toolbar's # button). |
+| `paragraphNumber` | The caret's paragraph's number, as the gutter shows it: for a status bar. |
 | `theme`, `zoom` | Change the look, or the scale, at any time. |
 | `readOnly`, `focus()` | As their names say. |
 | `destroy()` | Takes the editor out of the page. |
@@ -186,7 +189,7 @@ clipboard.
   machine, 2026-11-03). MaxPad reads again only the blocks an edit touched, which is what
   very long documents need here.
 - MaxPad's features beyond the editor itself: the outline, find and replace, the paragraph
-  annotations, the stylesheet files, spelling, export.
+  types in the gutter (the numbers are done), the stylesheet files, spelling, export.
 - Code highlighting by language, drag and drop of text, and pasting pictures.
 - Table commands beyond typing in cells, Tab and Enter (rows and columns added or deleted,
   alignment).

@@ -6,7 +6,7 @@
 //   const editor = new MarkdownEditor(document.querySelector('#editor'), { markdown: '# Hello', theme: 'dark' });
 //   editor.addEventListener('change', () => save(editor.value));
 
-import { VirtualTextView } from './view/VirtualTextView.js';
+import { VirtualTextView, GutterContent } from './view/VirtualTextView.js';
 import { MarkdownController } from './markdown/controller.js';
 import { MarkdownStyleProvider, RawStyleProvider, LIGHT_THEME, DARK_THEME } from './markdown/styleProvider.js';
 import { RawMode, rawToSource, rawFromSource } from './markdown/rawView.js';
@@ -67,16 +67,21 @@ const ICONS = {
     image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/>' +
         '<path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/>',
     marks: '<path d="M13 4v16"/><path d="M17 4v16"/><path d="M19 4H9.5a4.5 4.5 0 0 0 0 9H13"/>',
+    numbers: '<path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="M16 3l-2 18"/>',
     raw: '<path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/>' +
         '<path d="m10 13-2 2 2 2"/><path d="m14 17 2-2-2-2"/>',
 };
 
 /** The toolbar's items, in order ('|' a separator): what `toolbar: true` shows. */
 export const DEFAULT_TOOLBAR = ['undo', 'redo', '|', 'block', '|', 'strong', 'em', 'underline', 'strike', 'code', '|',
-    'quote', 'bullet', 'number', 'task', 'codeblock', '|', 'link', 'image', 'table', 'rule', '|', 'marks', 'raw'];
+    'quote', 'bullet', 'number', 'task', 'codeblock', '|', 'link', 'image', 'table', 'rule', '|', 'marks', 'numbers',
+    'raw'];
 
 // (what the raw Markdown view leaves on: the rest of the toolbar formats, which the source shown as it is has none of)
-const RAW_ITEMS = new Set(['undo', 'redo', 'marks', 'raw']);
+const RAW_ITEMS = new Set(['undo', 'redo', 'marks', 'numbers', 'raw']);
+
+// (the toolbar's switches of the view, which are on in a read-only document too)
+const VIEW_ITEMS = new Set(['marks', 'numbers', 'raw']);
 
 const LABELS = {
     undo: 'Undo (Ctrl+Z)', redo: 'Redo (Ctrl+Y)', strong: 'Bold (Ctrl+B)', em: 'Italic (Ctrl+I)', underline: 'Underline (Ctrl+U)',
@@ -84,7 +89,7 @@ const LABELS = {
     bullet: 'Bullet list (Ctrl+Shift+8)', number: 'Numbered list (Ctrl+Shift+7)', task: 'Task list (Ctrl+Shift+9)',
     codeblock: 'Code block (Ctrl+Alt+C)', link: 'Link (Ctrl+K)', image: 'Picture', table: 'Table',
     rule: 'Horizontal line (Ctrl+Alt+L)', marks: 'Paragraph marks', block: 'Paragraph or heading (Ctrl+0 to Ctrl+6)',
-    raw: 'Markdown source (Ctrl+Shift+R)',
+    raw: 'Markdown source (Ctrl+Shift+R)', numbers: 'Paragraph numbers',
 };
 
 const BLOCK_OPTIONS = [['paragraph', 'Paragraph'], ['h1', 'Heading 1'], ['h2', 'Heading 2'], ['h3', 'Heading 3'],
@@ -98,7 +103,8 @@ export class MarkdownEditor extends EventTarget {
      *   revealUnfocused (shown while the editor has no focus too; false by default), showFormattingMarks,
      *   imageBase (the URL relative pictures are loaded from), openLinks (Ctrl+click opens a link in a new tab; true
      *   by default), prompt (an async function (question, value) asking the user for a link's or a picture's
-     *   address; window.prompt by default), rawMode (start in the raw Markdown view) }
+     *   address; window.prompt by default), rawMode (start in the raw Markdown view), showParagraphNumbers (each
+     *   paragraph's number in a gutter left of the text) }
      */
     constructor(target, options = {}) {
         super();
@@ -118,6 +124,7 @@ export class MarkdownEditor extends EventTarget {
         this.view = new VirtualTextView(this.body, {
             styleProvider: this.styles, readOnly: this.options.readOnly, acceptsTab: true,
             showFormattingMarks: this.options.showFormattingMarks, label: this.options.label ?? 'Markdown editor',
+            leftGutterContent: this.options.showParagraphNumbers ? GutterContent.ParagraphNumbers : GutterContent.None,
             padding: this.options.padding ?? [16, 24, 24, 24],
         });
         if (this.options.imageBase) this.imageBase = this.options.imageBase;
@@ -264,6 +271,24 @@ export class MarkdownEditor extends EventTarget {
 
     get imageBase() {
         return this._imageBase;
+    }
+
+    /** Each paragraph's number in a gutter left of the text (MaxPad's View > Paragraph Numbers). Off by default. */
+    get showParagraphNumbers() {
+        return (this.view.leftGutterContent & GutterContent.ParagraphNumbers) !== 0;
+    }
+
+    set showParagraphNumbers(on) {
+        this.view.leftGutterContent = on ? GutterContent.ParagraphNumbers : GutterContent.None;
+        this._refreshToolbar();
+    }
+
+    /**
+     * The number of the paragraph the caret is in, as the gutter numbers it (a table's row being one), in either view:
+     * what a status bar says, to agree with the gutter. Null with no caret.
+     */
+    get paragraphNumber() {
+        return this.view.caret ? this.view.getParagraphNumber(this.view.caret.paragraph) : null;
     }
 
     get showFormattingMarks() {
@@ -418,6 +443,9 @@ export class MarkdownEditor extends EventTarget {
             case 'marks':
                 this.showFormattingMarks = !this.showFormattingMarks;
                 return undefined;
+            case 'numbers':
+                this.showParagraphNumbers = !this.showParagraphNumbers;
+                return undefined;
             case 'raw': return this.toggleRawMode();
             default:
                 throw new Error(`MarkdownEditor: no command "${name}".`);
@@ -539,10 +567,11 @@ export class MarkdownEditor extends EventTarget {
             else if (item === 'codeblock') pressed = type === 'code';
             else if (item === 'marks') pressed = this.showFormattingMarks;
             else if (item === 'raw') pressed = raw;
+            else if (item === 'numbers') pressed = this.showParagraphNumbers;
             if (pressed !== null) button.setAttribute('aria-pressed', String(pressed));
             if (item === 'undo') button.disabled = readOnly || !this.canUndo;
             else if (item === 'redo') button.disabled = readOnly || !this.canRedo;
-            else if (item !== 'marks' && item !== 'raw') button.disabled = readOnly || (raw && !RAW_ITEMS.has(item));
+            else if (!VIEW_ITEMS.has(item)) button.disabled = readOnly || (raw && !RAW_ITEMS.has(item));
         }
         if (this.blockSelect) {
             const known = BLOCK_OPTIONS.some(([value]) => value === type);

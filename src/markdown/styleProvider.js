@@ -3,7 +3,7 @@
 // give in part: { fontFamily, fontSize, codeFontFamily, color, background, headingColor, linkColor, syntaxColor,
 // quietColor, codeBackground, codeFrameColor, inlineCodeBackground, quoteBarColor, ruleColor, tableBorderColor,
 // tableHeaderBackground, selectionColor, caretColor, highlightColor, documentWidth, centered, listIndent,
-// paragraphSpacing, headingLines }.
+// paragraphSpacing, headingLines, paragraphNumberColor, gutterFontSize, currentLineColor }.
 
 import { parseStyleId } from './projection.js';
 
@@ -33,6 +33,8 @@ export const LIGHT_THEME = Object.freeze({
     listIndent: 28,
     paragraphSpacing: 8,
     headingLines: [3, 2, 1, 0.5, 0, 0],
+    paragraphNumberColor: '#ab2899',
+    gutterFontSize: 12,
 });
 
 export const DARK_THEME = Object.freeze({
@@ -54,6 +56,7 @@ export const DARK_THEME = Object.freeze({
     selectionColor: 'rgba(90, 160, 255, 0.35)',
     caretColor: '#ffffff',
     highlightColor: 'rgba(255, 200, 0, 0.35)',
+    paragraphNumberColor: '#d68bd0',
 });
 
 const HEADING_SCALE = [2.0, 1.6875, 1.4375, 1.25, 1.125, 1.0625];
@@ -78,6 +81,7 @@ export class MarkdownStyleProvider {
             maxWidth: t.documentWidth > 0 ? t.documentWidth : Infinity, placement: t.centered ? 'center' : 'left',
             background: t.background, color: t.color, selectionColor: t.selectionColor, caretColor: t.caretColor,
             highlightColor: t.highlightColor,
+            gutter: { fontFamily: t.fontFamily, fontSize: t.gutterFontSize, color: t.paragraphNumberColor },
         };
     }
 

@@ -52,7 +52,8 @@
   let savedVersion = editor.version;
   const refresh = () => {
     const words = editor.value.split(/\s+/).filter(Boolean).length;
-    status.textContent = `${editor.blockType} · ${words} words${editor.version !== savedVersion ? ' · edited' : ''}`;
+    const where = editor.paragraphNumber ? `paragraph ${editor.paragraphNumber} · ` : '';
+    status.textContent = `${where}${editor.blockType} · ${words} words${editor.version !== savedVersion ? ' · edited' : ''}`;
   };
   editor.addEventListener('change', refresh);
   editor.addEventListener('selectionchange', refresh);

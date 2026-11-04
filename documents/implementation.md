@@ -151,8 +151,10 @@ A style provider is an object with any of `getParagraphStyle(id)`,
   decorations, `script` (`'sub'` or `'super'`), and `css`.
 - **Document style:** `maxWidth` and `placement` (the text held to a width, centered or not;
   the scroll bar stays at the edge), background, color, the colors of the selection, the
-  caret and the highlights, and `currentLineColor`: a band behind the caret's line (none by
-  default; the raw Markdown view has one, as MaxPad's).
+  caret and the highlights, `currentLineColor`: a band behind the caret's line (none by
+  default; the raw Markdown view has one, as MaxPad's), and `gutter`: how the gutter's
+  numbers look (font, size, bold, color) and the gutter itself (a background, and a line
+  between it and the text) (section 4.10).
 
 `ResolvedParagraphStyle` turns a paragraph style into two strings of CSS, one for the outer
 element and one for the box, and the numbers that height estimates use. **The margin is the
@@ -167,11 +169,13 @@ host (.vtv)                       the host's element
   .vtv-scroller                   overflow: auto, fills the host
     .vtv-page                     its height is the document's
       .vtv-underlay               under the text: the current line's band
+      .vtv-gutter                 left of the text: the paragraph numbers
       .vtv-content                absolute, at the top of the first
                                   paragraph laid out
         .vtv-para                 a paragraph: the margins as padding
           .vtv-box                font, border, padding, background
             .vtv-marker           the drawn list marker
+            span.vtv-base         no room: on the first line's baseline
             span.vtv-run ...      a run (a break is a span of its own)
             img.vtv-image         a picture, after its run
             span.vtv-eol          a zero-width space: the paragraph's end
@@ -212,6 +216,9 @@ The view's CSS is put into the page once, from a string in the module.
   height 0, so that it takes only its border and padding.
 - Every box ends with a zero-width space, so that an empty paragraph has a line and the
   caret a place at the end.
+- Every box starts with an inline block of no size (`.vtv-base`), which sits on the first
+  line's baseline: where the gutter puts the paragraph's number (section 4.10). It is no text
+  of the paragraph, and takes no room.
 - A picture is an `<img>` after its run, as wide as its line at most; one that cannot be
   loaded is a dashed box with its description, so that a missing file never breaks the
   document.
@@ -306,17 +313,53 @@ What a host calls:
 | `setTypingFormat(fn)` | The format of what is typed next (dropped when the caret moves). |
 | `setHighlights(list)` | Ranges shaded behind the text (`{ start, end, color }`). |
 | `getText`, `getParagraph`, `getTextRange`, `getCaretRect`, `positionFromPoint` | Reading it back. |
+| `getParagraphNumber(i)` | The number the gutter gives a paragraph (section 4.10). |
 | `copy`, `cut`, `paste`, `focus`, `destroy` | As their names say. |
 
 Properties: `readOnly`, `acceptsTab`, `wordWrap`, `showFormattingMarks`, `zoom` (every size
-scaled), `padding`, `styleProvider`, `editRecorder`, `keymap`, `imageResolver` (an image's
-address to the URL it is loaded from), `version` (counts every change). Events:
+scaled), `padding`, `leftGutterContent` (section 4.10), `styleProvider`, `editRecorder`,
+`keymap`, `imageResolver` (an image's address to the URL it is loaded from), `version`
+(counts every change). Events:
 `documentchange` and `selectionchange` (each once per burst, a microtask later),
 `editcommand`, `key`, `hyperlinkclick`, `runclick`, `focus`, `blur`, `undo`, `redo`,
 `clipboardunavailable`.
 
 `static backspaceStart`, `deleteEnd`, `wordStart`, `wordEnd` are the view's rules of what a
 delete takes, for a host that does its own deleting (as in the control).
+
+### 4.10 The gutter
+
+The WPF control's gutters (`VirtualTextView.Gutters.cs`), of which this has the left one and
+its paragraph numbers so far: MaxPad's View > Paragraph Numbers.
+
+- **What it shows** is `leftGutterContent`: `GutterContent.ParagraphNumbers`, or
+  `GutterContent.None` (the default), when it is not there and takes no room. It is the
+  view's setting, not the document's.
+- **Where it is:** inside the padding, left of the text, with 8 px between it and the text
+  (the control's `GutterSpacing`). It is one more term of the left inset (the page's left
+  padding and the content's left), so nothing else of the layout knows of it; the text's
+  maximum width is the text's, so a gutter widens the page rather than narrowing the text,
+  and with the text centered the gutter goes with it.
+- **How wide:** the numbers column is as wide as the count of paragraphs has digits (two at
+  least), with 6 px either side and the border, as the control's. When the count gains a
+  digit, the gutter widens, the text narrows, and every height is measured again.
+- **The numbers** are the paragraphs' places among the document's blocks, from 1, where a
+  table's row is one block: its cells have its first cell's number, and the row's number is
+  beside its first cell (`getParagraphNumber`; the count of a row's later cells before each
+  paragraph is kept once per change of the document). So the raw Markdown view, whose
+  paragraphs start where the formatted view's do and hold a table's row in one, numbers its
+  paragraphs as the formatted view does (section 9).
+- **Where a number goes:** on its paragraph's first line, baseline to baseline, so that a
+  number beside a large heading lines up with the heading's text: its top is the paragraph's
+  `.vtv-base` less the number's own baseline (measured once per font). A paragraph with
+  nothing to see (collapsed: a code fence out of sight) has no number, so that it writes over
+  no neighbour's, unless its box is drawn (a border, a background) and its room, margins and
+  all, is half as tall again as a number (a rule): the number then sits in the middle of the
+  room.
+- **Drawn after each layout**, for the paragraphs laid out: every place is read first and
+  every number written after, so that the page is laid out once and not once a number.
+- **Not done:** the right gutter, the paragraph types (the control's `StyleNames`), the
+  outline marks, and a host's own drawing in the gutter (`IGutterAdorner`).
 
 ------
 
@@ -669,7 +712,8 @@ Markdown").
   of the line a projected paragraph begins on (the cells of a table row share one), and holds
   the lines up to the next: its line endings are breaks inside it (U+2028), the last its end,
   so the blank line that separates two blocks is a break at the end of the first
-  (`rawStarts`, `rawTexts`). The last paragraph keeps everything to the end of the text.
+  (`rawStarts`, `rawTexts`). The last paragraph keeps everything to the end of the text. So
+  the gutter's paragraph numbers agree in both views (section 4.10), as MaxPad's do.
 - **A place in the source is the same place in either view.** With "\n" line endings and a
   break being one character, a raw position is its paragraph's start plus its index
   (`toRaw`); once the text was edited, a position is the lengths of the paragraphs before it,
@@ -720,6 +764,8 @@ light background; quotes in a quiet color.
   colors, `documentWidth`, `centered`, `listIndent`, `paragraphSpacing`, `headingLines`...).
   A page gives a theme in part, over the light one (or over the dark one, with
   `base: 'dark'`).
+- **The gutter's numbers** are in the body's font at `gutterFontSize` (12) and in
+  `paragraphNumberColor`, MaxPad's magenta (#AB2899; a lighter one in the dark theme).
 - **The raw view's look** (`RawStyleProvider`, MaxPad's): the theme's code font a little
   smaller than the body, no margins, nothing hidden or styled, and a light band behind the
   caret's line (the theme's `currentLineColor`, or a light yellow, a dark one in a dark
@@ -735,7 +781,8 @@ light background; quotes in a quiet color.
 provider from the theme and the controller from the Markdown. Options: `markdown`, `theme`,
 `toolbar` (`true`, `false`, or a list of `DEFAULT_TOOLBAR`'s items), `readOnly`,
 `revealSyntax`, `revealUnfocused`, `showFormattingMarks`, `imageBase`, `openLinks`,
-`prompt`, `padding`, `label`, `onChange`, `rawMode` (start in the raw Markdown view).
+`prompt`, `padding`, `label`, `onChange`, `rawMode` (start in the raw Markdown view),
+`showParagraphNumbers` (the gutter's numbers, section 4.10; off by default).
 
 - **The keys** are bound in the view's `keymap`, as MaxPad's where a browser leaves them to a
   page:
@@ -763,8 +810,9 @@ provider from the theme and the controller from the Markdown. Options: `markdown
 - **The toolbar:** buttons with inline SVG icons that do not take the focus (a click keeps
   the caret in the editor), and a list of paragraph and heading levels. After every change
   and every move of the caret it shows which formats are on, the paragraph's type, and
-  whether undo and redo can be done. Its last button is the raw Markdown view; while that is
-  on, only undo, redo, the marks and that button are on.
+  whether undo and redo can be done. Its last buttons switch the view: the paragraph marks,
+  the paragraph numbers and the raw Markdown view, which are on in a read-only document too;
+  while the raw view is on, only undo, redo and those three are on.
 - **Links:** Ctrl+click raises `linkclick` (`detail.href`, `detail.title`); unless the page
   cancels it, an `http`, `https` or `mailto` link opens in a new tab.
 - **Theme colors** for the frame and the toolbar are CSS variables on the root, set from the
@@ -774,7 +822,9 @@ provider from the theme and the controller from the Markdown. Options: `markdown
   `focus`, `destroy`, `undo`, `redo`, `canUndo`, `canRedo`, `toggleInline`, `isInline`,
   `setBlockType`, `setHeadingLevel`, `stepHeadingLevel`, `blockType`, `insertTable`,
   `insertRule`, `insertCodeBlock`, `insertLink`, `insertImage`, `promptLink`, `promptImage`,
-  `rawMode`, `toggleRawMode`, `execute(name)`; events `change`, `selectionchange`,
+  `rawMode`, `toggleRawMode`, `showParagraphNumbers`, `paragraphNumber` (the caret's
+  paragraph's, as the gutter numbers it, in either view: what a status bar says),
+  `execute(name)`; events `change`, `selectionchange`,
   `linkclick`, `modechange` (the raw view on or off).
 
 ------
@@ -787,7 +837,8 @@ provider from the theme and the controller from the Markdown. Options: `markdown
   or `<template>` in it, or its own text, with the first and last blank lines and the
   indentation its lines share taken off (so that the Markdown can be indented in the HTML).
   `src` loads a file, and makes the file's folder where its pictures are loaded from.
-- **Attributes:** `theme`, `toolbar="false"`, `readonly`, `image-base`, `src`, `name`.
+- **Attributes:** `theme`, `toolbar="false"`, `readonly`, `image-base`, `src`, `name`,
+  `paragraph-numbers`.
 - **A form field:** it is form-associated (`ElementInternals`): a form submits its Markdown
   under its `name`, and it raises `input` and `change` (bubbling) after each change, and
   `linkclick`.
@@ -807,9 +858,9 @@ the suites; `?steps=150` makes the random test longer.
 | `parser.test.js` | the block structure, lists, quotes, code, HTML, tables, front matter, definitions, line marks, inlines and their offsets |
 | `projection.test.js` | blank lines, hidden and shown syntax (`⟦hidden⟧`, `⟨concealed⟩`), styles, list markers, and that every paragraph is its stretch of the source and every position maps to the source and back |
 | `commands.test.js` | each editing rule, the formats and the paragraph types, written with `¦` for the caret and `«...»` for a selection, as MaxPad.Editing.Tests write theirs |
-| `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits |
+| `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits, the gutter's numbers (a table's row one, its room taken and given back) |
 | `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them |
-| `raw.test.js` | the raw view's paragraphs and its map to the source (every offset there and back); looking that changes nothing; text changed in it as one undo step; no formats in it |
+| `raw.test.js` | the raw view's paragraphs and its map to the source (every offset there and back); looking that changes nothing; text changed in it as one undo step; no formats in it; the paragraph numbers of the two views agreeing |
 
 After every command `editor.test.js` checks what MaxPad.Editing.Tests check: the view's
 paragraphs are those of a fresh projection of the source (text, style and runs), and only the
@@ -834,14 +885,20 @@ document, 11 ms at 50 KB and 22 ms at 167 KB (Chrome, on the development machine
 and laying it out. A document of 172 KB (4,500 paragraphs) loaded in 62 ms. MaxPad
 reads again only the blocks an edit touched; that is the change long documents need here.
 
+The gutter's numbers add the reading of each laid-out paragraph's baseline to every layout:
+about 1 to 4 ms to a scroll's layout of that document (measured in a browser pane that was
+out of sight, which slows a page several times over: the numbers are of the gutter's share,
+not of the time a key takes). Measure timings with the page in sight.
+
 ------
 
 ## 15. Not done, and differences from MaxPad
 
 - Incremental parsing (section 14).
-- MaxPad's outline, find and replace, paragraph annotations, stylesheet files (the raw
-  view's too, section 9), spelling and export; code highlighting; drag and drop of text;
-  pasting pictures; table commands beyond typing, Tab and Enter.
+- MaxPad's outline, find and replace, the paragraph types in the gutter (its numbers are
+  done, section 4.10), stylesheet files (the raw view's too, section 9), spelling and
+  export; code highlighting; drag and drop of text; pasting pictures; table commands beyond
+  typing, Tab and Enter.
 - A document whose line endings are a mixture is saved with its first kind.
 - An editor without the focus shows no syntax (MaxPad shows it at the caret always; section
   8).

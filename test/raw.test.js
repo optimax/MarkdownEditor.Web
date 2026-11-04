@@ -73,6 +73,23 @@ test('text changed in the source is the document, one undo step', async () => {
     ok(!editor.rawMode);
 });
 
+test('the paragraph numbers of the two views agree', () => {
+    const editor = makeEditor('# T\n\ntext\nmore\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n```\nx\n```\n\n- i\n- j',
+        { showParagraphNumbers: true });
+    const numbersOf = () => {
+        const view = editor.view, out = [];
+        for (let i = 0; i < view.paragraphCount; i++) {
+            const first = view.paragraphs[i].cell ? view.paragraphs[i].cell.column === 0 : true;
+            if (first) out.push(view.getParagraphNumber(i));
+        }
+        return out;
+    };
+    const formatted = numbersOf();
+    editor.rawMode = true;
+    equal(numbersOf(), formatted, 'a number for each paragraph of the raw view, as the formatted view has them');
+    ok(editor.showParagraphNumbers, 'the gutter stays');
+});
+
 test('formatting does nothing in the source; setting the value leaves it', () => {
     const editor = makeEditor('word', { rawMode: true });
     ok(editor.rawMode, 'started in the source');

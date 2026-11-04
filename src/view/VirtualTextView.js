@@ -50,6 +50,10 @@ const CSS = `
 .vtv-table { border-collapse: collapse; }
 .vtv-table td { vertical-align: top; padding: 0; }
 .vtv-overlay, .vtv-underlay { position: absolute; inset: 0; pointer-events: none; }
+.vtv-gutter { position: absolute; top: 0; bottom: 0; box-sizing: border-box; overflow: hidden; pointer-events: none;
+  user-select: none; display: none; }
+.vtv-gutter-label { position: absolute; white-space: nowrap; line-height: normal; }
+.vtv-base { display: inline-block; width: 0; height: 0; }
 .vtv-current-line { position: absolute; left: 0; right: 0; display: none; }
 .vtv-selection, .vtv-highlight { position: absolute; }
 .vtv-caret { position: absolute; width: 2px; margin-left: -1px; }
@@ -86,6 +90,12 @@ export function keyChord(event) {
     return parts.join('+');
 }
 
+/** What a gutter shows (the WPF control's GutterContent, of which this has the paragraph numbers so far). */
+export const GutterContent = Object.freeze({ None: 0, ParagraphNumbers: 1 });
+
+const GUTTER_PADDING = 6; // (inside the gutter, either side of its numbers)
+const GUTTER_SPACING = 8; // (between the gutter and the text: the control's DefaultGutterSpacing)
+
 /** The text a run shows: a line break inside the paragraph is a line break, unless the run is hidden. */
 const shownText = (text, hidden) => (text.includes(SOFT_BREAK) ? text.replaceAll(SOFT_BREAK, hidden ? ' ' : '\n') : text);
 
@@ -116,7 +126,8 @@ export class VirtualTextView extends EventTarget {
         this.input.setAttribute('spellcheck', 'false');
         this.input.setAttribute('aria-label', options.label ?? 'Text editor');
         this.input.tabIndex = host.tabIndex >= 0 ? host.tabIndex : 0;
-        this.page.append(this.underlay, this.content, this.overlay);
+        this.gutter = el('div', 'vtv-gutter'); // (left of the text: the paragraph numbers)
+        this.page.append(this.underlay, this.gutter, this.content, this.overlay);
         this.overlay.append(this.caretElement, this.composition);
         this.page.append(this.input);
         this.scroller.append(this.page);
@@ -155,6 +166,8 @@ export class VirtualTextView extends EventTarget {
         this._padding = sides(options.padding ?? [12, 16, 12, 16]);
         this._wordWrap = options.wordWrap !== false;
         this._showFormattingMarks = !!options.showFormattingMarks;
+        this._leftGutterContent = options.leftGutterContent ?? GutterContent.None;
+        this._gutterLabels = [];
         this._zoom = 1;
         this._applyDocumentStyle();
         this._wireInput();
@@ -191,6 +204,23 @@ export class VirtualTextView extends EventTarget {
         this._readOnly = !!value;
         this.input.readOnly = this._readOnly;
         this._drawOverlay();
+    }
+
+    /**
+     * What the gutter left of the text shows (`GutterContent`): `ParagraphNumbers`, each paragraph's number beside its
+     * first line, or `None` (the default), when the gutter is not there and takes no room. A view setting, not the
+     * document's; how it looks is the document style's `gutter`.
+     */
+    get leftGutterContent() {
+        return this._leftGutterContent;
+    }
+
+    set leftGutterContent(content) {
+        const value = content || GutterContent.None;
+        if (value === this._leftGutterContent) return;
+        this._leftGutterContent = value;
+        this._applyDocumentStyle();
+        this._invalidateHeights();
     }
 
     get padding() {
@@ -716,13 +746,17 @@ export class VirtualTextView extends EventTarget {
         const style = { ...DEFAULT_DOCUMENT_STYLE, ...(this._styleProvider?.getDocumentStyle?.() ?? {}) };
         this.documentStyle = style;
         const [top, right, bottom, left] = this._padding.map((side) => side * this._zoom);
-        this.page.style.paddingLeft = left + 'px';
+        // (the gutter: another term of the left inset, inside the padding, as the control's -- and the text's maximum
+        // width is the text's, so the gutter widens the page rather than narrowing the text)
+        const gutter = this._styleGutter(style.gutter, left);
+        const room = gutter ? gutter + GUTTER_SPACING * this._zoom : 0;
+        this.page.style.paddingLeft = left + room + 'px';
         this.page.style.paddingRight = right + 'px';
-        this.content.style.left = left + 'px';
+        this.content.style.left = left + room + 'px';
         this.content.style.right = right + 'px';
         this._padTop = top;
         this._padBottom = bottom;
-        const maxWidth = Number.isFinite(style.maxWidth) ? style.maxWidth * this._zoom + left + right : null;
+        const maxWidth = Number.isFinite(style.maxWidth) ? style.maxWidth * this._zoom + left + right + room : null;
         this.page.style.maxWidth = maxWidth ? maxWidth + 'px' : '';
         this.page.style.margin = style.placement === 'center' ? '0 auto' : '0';
         this.host.style.background = style.background;
@@ -730,6 +764,114 @@ export class VirtualTextView extends EventTarget {
         this.caretElement.style.background = style.caretColor;
         this.host.classList.toggle('vtv-nowrap', !this._wordWrap);
         this.host.classList.toggle('vtv-marks', this._showFormattingMarks);
+    }
+
+    // ---- The gutter -----------------------------------------------------------------------------------------------
+
+    // Styles the gutter and gives its width (0 when it shows nothing): its numbers' column is as wide as the number of
+    // paragraphs has digits (two at least), with room either side, as the control's.
+    _styleGutter(look, left) {
+        const gutter = this.gutter;
+        this._gutterDigits = this._digitsOfCount();
+        this._gutterBaseline = null; // (measured again when it is drawn: the font may have changed)
+        if (!this._leftGutterContent) {
+            gutter.style.display = 'none';
+            return 0;
+        }
+        const g = { ...DEFAULT_DOCUMENT_STYLE.gutter, ...(look ?? {}) };
+        const size = g.fontSize * this._zoom;
+        const font = `${g.bold ? 700 : 400} ${size}px ${g.fontFamily}`;
+        const canvas = (VirtualTextView._measure ??= document.createElement('canvas')).getContext('2d');
+        canvas.font = font;
+        const border = g.borderColor ? 1 : 0;
+        const width = Math.ceil(this._gutterDigits * canvas.measureText('0').width + 2 * GUTTER_PADDING * this._zoom + border);
+        gutter.style.cssText = `display:block;left:${left}px;width:${width}px;font:${font};color:${g.color};` +
+            (g.background ? `background:${g.background};` : '') +
+            (border ? `border-right:1px solid ${g.borderColor};` : '');
+        this._gutterInset = GUTTER_PADDING * this._zoom + border; // (from the gutter's right edge to its numbers)
+        return width;
+    }
+
+    _digitsOfCount() {
+        return Math.max(2, String(Math.max(1, this.paragraphs?.length ?? 1)).length);
+    }
+
+    /**
+     * The number the gutter gives paragraph `index`: its place among the document's blocks, from 1, where a table's row
+     * is one block (its cells all have its first cell's number), as the control's. What a status bar says of the caret's
+     * paragraph, to agree with the gutter.
+     */
+    getParagraphNumber(index) {
+        const i = Math.max(0, Math.min(index, this.paragraphs.length - 1));
+        return i + 1 - this._laterCellsBefore(i);
+    }
+
+    // How many paragraphs up to `index` are a table row's cell other than its first (counted once per change of the
+    // document: none in a document with no table).
+    _laterCellsBefore(index) {
+        if (this._cellCount?.version !== this._version) {
+            let counts = null, count = 0;
+            for (let p = 0; p < this.paragraphs.length; p++) {
+                if (this.paragraphs[p].cell?.column > 0) {
+                    counts ??= new Int32Array(this.paragraphs.length);
+                    count++;
+                }
+                if (counts) counts[p] = count;
+            }
+            this._cellCount = { version: this._version, counts };
+        }
+        return this._cellCount.counts ? this._cellCount.counts[index] : 0;
+    }
+
+    // The numbers beside the paragraphs laid out, each on its paragraph's first line, baseline to baseline (so that one
+    // beside a large heading lines up with the heading's text). A paragraph with nothing to see (a code fence out of
+    // sight) has none, so that it writes over no neighbour's -- unless its box is drawn (a border, a background) and its
+    // room, margins and all, is half as tall again as a number (a rule): its number then sits in the middle of the room.
+    // (all the places are read first and the numbers written after, so that the page is laid out once, not once a number)
+    _drawGutter() {
+        const labels = this._gutterLabels;
+        const numbers = [];
+        if (this._leftGutterContent & GutterContent.ParagraphNumbers) {
+            const page = this._pageRect().top;
+            if (this._gutterBaseline === null) {
+                const probe = el('div', 'vtv-gutter-label');
+                probe.append('0', el('span', 'vtv-base'));
+                this.gutter.append(probe);
+                const box = probe.getBoundingClientRect();
+                this._gutterBaseline = probe.lastChild.getBoundingClientRect().top - box.top;
+                this._gutterLabelHeight = box.height;
+                probe.remove();
+            }
+            for (const element of this.content.children) {
+                for (const box of element._boxes ?? [element._box]) {
+                    const paragraph = box._paragraph;
+                    if (paragraph.cell?.column > 0) continue; // (a table row is one number, beside its first cell)
+                    let top;
+                    if (box.classList.contains('vtv-collapsed')) {
+                        const style = this._paragraphStyle(paragraph.styleId);
+                        const drawn = style.border.some((side) => side > 0) || !!style.style.background;
+                        const outer = (element._boxes ? box : element).getBoundingClientRect();
+                        if (!drawn || outer.height < 1.5 * this._gutterLabelHeight) continue;
+                        top = outer.top - page + (outer.height - this._gutterLabelHeight) / 2;
+                    } else {
+                        top = box._base.getBoundingClientRect().top - page - this._gutterBaseline;
+                    }
+                    numbers.push({ number: this.getParagraphNumber(box._index), top });
+                }
+            }
+        }
+        numbers.forEach(({ number, top }, k) => {
+            let label = labels[k];
+            if (!label) {
+                label = el('div', 'vtv-gutter-label');
+                this.gutter.append(label);
+                labels.push(label);
+            }
+            const text = String(number);
+            if (label.textContent !== text) label.textContent = text;
+            label.style.cssText = `top:${top}px;right:${this._gutterInset}px;`;
+        });
+        for (let k = numbers.length; k < labels.length; k++) labels[k].style.cssText = 'display:none';
     }
 
     // ---- Layout ---------------------------------------------------------------------------------------------------
@@ -855,6 +997,12 @@ export class VirtualTextView extends EventTarget {
             return;
         }
         if (!this.host.isConnected) return;
+        if (this._leftGutterContent && this._digitsOfCount() !== this._gutterDigits) {
+            // (one more digit to the numbers: the gutter is wider, the text narrower, every height to measure again)
+            this._applyDocumentStyle();
+            this._widthCache = 0;
+            this.measured = this.paragraphs.map(() => false);
+        }
         const scroller = this.scroller;
         for (let pass = 0; pass < 4; pass++) {
             this._ensureTops();
@@ -875,6 +1023,7 @@ export class VirtualTextView extends EventTarget {
                 if (Math.abs(wanted - scroller.scrollTop) > 0.5) scroller.scrollTop = wanted;
             }
         }
+        this._drawGutter();
     }
 
     _render(first, last) {
@@ -941,6 +1090,9 @@ export class VirtualTextView extends EventTarget {
             marker.style.top = style.padding[0] + 'px';
             box.append(marker);
         }
+        // (no room, no text: it sits on the first line's baseline, which is where the gutter's number goes)
+        box._base = el('span', 'vtv-base');
+        box.append(box._base);
         let at = 0;
         for (const run of paragraph.runs) {
             const css = this._runCss(run);

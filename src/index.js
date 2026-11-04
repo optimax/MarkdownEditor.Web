@@ -13,7 +13,7 @@ export { RawMode, RawHistory, rawStarts, rawTexts, sourceOfRaw } from './markdow
 export { parseMarkdown } from './markdown/parser.js';
 export { project, viewRunsOf, styleIdOf, parseStyleId } from './markdown/projection.js';
 export { MarkdownState } from './markdown/state.js';
-export { VirtualTextView, keyChord } from './view/VirtualTextView.js';
+export { VirtualTextView, GutterContent, keyChord } from './view/VirtualTextView.js';
 export {
     TextEdit, pos, comparePositions, samePosition, plainParagraph, paragraphText, cloneParagraph, SOFT_BREAK,
 } from './view/model.js';

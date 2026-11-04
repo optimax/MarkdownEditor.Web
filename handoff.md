@@ -36,6 +36,11 @@ edit source in place", of the demo's "Show the Markdown", which was a read-only 
 the editor): MaxPad's View > Raw Markdown, in the model of MaxPad's `RawModeService`; the
 demo's "Show the Markdown" is it now. See the document's section 9.
 
+Paragraph numbers in a gutter (2026-11-03, the user: "Optionally display paragraph numbers in
+the gutter"): the control's left gutter with its `ParagraphNumbers`, MaxPad's View >
+Paragraph Numbers; `showParagraphNumbers` on the editor, off by default. See the document's
+section 4.10.
+
 ## Design decisions
 
 The decisions are in `documents/implementation.md`; the ones a new session needs first:
@@ -54,14 +59,18 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Verification
 
-- `test/index.html`: 52 passed, 0 failed (Chrome, in the Claude desktop app's browser).
+- `test/index.html`: 54 passed, 0 failed (Chrome, in the Claude desktop app's browser).
   `?steps=150` ran the random test clean as well.
 - Tried by hand in the browser: typing, the syntax at the caret, Enter in a list and a
   quote, a task's box clicked, a word double-clicked and made bold from the toolbar, the
   code fences shown together, copy, cut and paste, the dark theme, the element in a form,
   Ctrl+0 to Ctrl+6, Ctrl+= and Ctrl+-; the raw view by Ctrl+Shift+R (the page not
   reloaded), the source edited in it and made the document on leaving, one undo back, the
-  dark theme in it.
+  dark theme in it; the paragraph numbers from the toolbar, beside headings, items, code, a
+  table and a rule, and the same in the raw view.
+- Timings are only good with the browser pane in sight: a pane out of sight runs the page as
+  a background page, several times slower (2026-11-03: 112 ms a key where 22 ms had been
+  measured on the same document).
 - Not tried: Firefox and Safari, a touch keyboard, an input method (the code is there:
   composition events), right-to-left text, Ctrl and a real mouse wheel (only a dispatched
   wheel event).

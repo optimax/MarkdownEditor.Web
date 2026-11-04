@@ -1,6 +1,6 @@
 // The view on its own, as TinyPad uses it: its own editing, the edits it tells its recorder of, and their replay.
-import { test, equal } from './harness.js';
-import { VirtualTextView, pos, plainParagraph } from '../src/index.js';
+import { test, equal, ok } from './harness.js';
+import { VirtualTextView, GutterContent, pos, plainParagraph } from '../src/index.js';
 
 function makeView(paragraphs, styleProvider) {
     const stage = document.getElementById('stage');
@@ -64,6 +64,27 @@ test('a host that does the edits itself', () => {
     equal(view.getText(), 'ABC\ntwo');
     equal(view.caret, pos(1, 1), 'the caret after the replaced paragraphs is where it was');
     equal(edits.length, 0, 'nothing is recorded for the host');
+});
+
+test('paragraph numbers in the gutter, a table\'s row being one', () => {
+    const table = { columns: 2 };
+    const cell = (text, row, column) => ({ runs: [{ text }], cell: { table, row, column } });
+    const { view } = makeView([plainParagraph('a'), cell('h1', 0, 0), cell('h2', 0, 1), cell('c1', 1, 0), cell('c2', 1, 1),
+        plainParagraph('b'), { runs: [{ text: '---', hidden: true }] }]);
+    equal([0, 1, 2, 3, 4, 5, 6].map((i) => view.getParagraphNumber(i)), [1, 2, 2, 3, 3, 4, 5]);
+    const left = view.content.getBoundingClientRect().left;
+    const shown = () => [...view.gutter.querySelectorAll('.vtv-gutter-label')]
+        .filter((label) => label.style.display !== 'none').map((label) => label.textContent);
+    equal(shown(), [], 'no gutter by default');
+    view.leftGutterContent = GutterContent.ParagraphNumbers;
+    ok(view.content.getBoundingClientRect().left > left, 'the gutter takes room left of the text');
+    equal(shown(), ['1', '2', '3', '4'], 'one number a row; none for a line with nothing to see');
+    const first = view.gutter.querySelector('.vtv-gutter-label').getBoundingClientRect();
+    const text = view.content.querySelector('.vtv-run').getBoundingClientRect();
+    ok(first.bottom > text.top && first.top < text.bottom, 'a number is on its paragraph\'s first line');
+    view.leftGutterContent = GutterContent.None;
+    equal(shown(), []);
+    equal(view.content.getBoundingClientRect().left, left, 'and its room is given back');
 });
 
 test('positions, text and selection', () => {
