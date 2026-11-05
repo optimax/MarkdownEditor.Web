@@ -6,6 +6,14 @@ list and a table is a table. The document stays Markdown all the while: plain te
 Markdown tool reads, that a form can submit, and that version control can compare line by
 line.
 
+The Markdown is CommonMark, the standard definition of Markdown
+(<https://spec.commonmark.org>), and the editor aims to comply with it: a document means in
+the editor what CommonMark says it means, and what the editor writes is CommonMark, so that
+another Markdown tool shows it the same way. To it the editor adds the extensions of MaxPad,
+the Windows editor it is the web counterpart of: tables, task lists, front matter,
+underline, strikethrough, subscript and superscript. A tool that does not know them may show
+them as written. Appendix A lists all of it.
+
 It is a plain JavaScript component: no framework, no build step, nothing to install. A page
 puts it in with a few lines of script, or with a `<markdown-editor>` element and no script at
 all.
