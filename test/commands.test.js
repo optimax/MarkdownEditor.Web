@@ -4,7 +4,7 @@ import { test, equal } from './harness.js';
 import { MarkdownState } from '../src/markdown/state.js';
 import * as commands from '../src/markdown/commands.js';
 import { toggleInline, isInline } from '../src/markdown/formatting.js';
-import { setBlockType, setHeadingLevel, stepHeadingLevel, insertTable } from '../src/markdown/blocks.js';
+import { setBlockType, setHeadingLevel, stepHeadingLevel, insertTable, insertLink } from '../src/markdown/blocks.js';
 
 function parse(marked) {
     let source = '', anchor = null, caret = null;
@@ -99,6 +99,17 @@ test('Tab', () => {
     check(commands.tab, '¦- a', null);
 });
 
+test('Tab on a numbered item: a nested list numbered 1, or the nested list there gone on', () => {
+    const back = (state, selection) => commands.tab(state, selection, true);
+    check(commands.tab, '1. a\n2. ¦b', '1. a\n   1. ¦b');
+    check(commands.tab, '1) a\n2) ¦b', '1) a\n   1) ¦b');
+    check(commands.tab, '9. a\n10. ¦b', '9. a\n   1. ¦b');
+    check(commands.tab, '1. a\n2. ¦b\n   c', '1. a\n   1. ¦b\n      c');
+    check(commands.tab, '1. a\n   1. x\n2. ¦b', '1. a\n   1. x\n   2. ¦b');
+    check(commands.tab, '1. a\n2. ¦b\n3. c', '1. a\n   1. ¦b\n3. c');
+    check(back, '1. a\n   1. ¦b', '1. a\n2. ¦b');
+});
+
 test('typing on an empty paragraph keeps the blank line after it', () => {
     check((state, selection) => commands.insertText(state, selection, 'x'), 'a\n\n¦\nb', 'a\n\nx¦\n\nb');
     const typePipe = (state, selection) => commands.insertText(state, selection, 'x|y');
@@ -146,6 +157,22 @@ test('paragraph types', () => {
     check((state, selection) => setBlockType(state, selection, 'paragraph'), '- a\n- b¦', '- a\n\nb¦');
     check((state, selection) => setBlockType(state, selection, 'code'), 'a¦', '```¦\na\n```');
     check(insertTable, 'a¦', 'a\n\n| «Column 1» | Column 2 | Column 3 |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |');
+});
+
+test('links: the selection made one, or the address of the one the caret is in changed (MaxPad\'s Ctrl+K)', () => {
+    const link = (address, title) => (state, selection) => insertLink(state, selection, address, title);
+    check(link('https://x.org'), 'see «docs»', 'see [docs](https://x.org)¦');
+    check(link('https://x.org'), 'see ¦', 'see [https://x.org](https://x.org)¦');
+    check(link('my file.pdf'), 'a «b»', 'a [b](<my file.pdf>)¦');
+    check(link(''), 'a «b»', null);
+    check(link('https://new.org'), 'see [do¦cs](https://old.org) here', 'see [«docs»](https://new.org) here');
+    check(link('https://new.org'), 'see [«docs»](https://old.org)', 'see [«docs»](https://new.org)');
+    check(link('v'), '[a **b**¦](u "T")', '[«a **b**»](v "T")');
+    check(link('v', 'New'), '[a¦](u "T")', '[«a»](v "New")');
+    check(link('https://b.org'), '<https://a¦.org>', '[«https://a.org»](https://b.org)');
+    check(link('https://b.org'), '[te¦xt][r]\n\n[r]: https://a.org', '[«text»](https://b.org)\n\n[r]: https://a.org');
+    check(link('v'), '| [a¦](u) |\n| --- |', '| [«a»](v) |\n| --- |');
+    check(link(''), 'x [do¦cs](u) y', 'x «docs» y');
 });
 
 test('heading levels, as MaxPad\'s Ctrl+0 to Ctrl+6, Ctrl+= and Ctrl+-', () => {

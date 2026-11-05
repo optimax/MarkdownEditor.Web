@@ -43,8 +43,9 @@ export class MarkdownController extends EventTarget {
         listen('editcommand', (event) => this._onEditCommand(event));
         listen('selectionchange', () => this._onViewSelection());
         listen('runclick', (event) => this._onRunClick(event));
-        listen('undo', () => this.undo());
-        listen('redo', () => this.redo());
+        // (the browser's Edit menu: not in a read-only document, which it would change)
+        listen('undo', () => view.readOnly || this.undo());
+        listen('redo', () => view.readOnly || this.redo());
         // (on a page, an editor without the focus shows no syntax: it reads as the formatted text it is)
         for (const type of ['focus', 'blur']) listen(type, () => view.batch(() => this._reveal()));
         this.load(options.markdown ?? '');
@@ -202,28 +203,29 @@ export class MarkdownController extends EventTarget {
         this._run(() => blocks.insertCodeBlock(this.state, this.selection, language), 'block');
     }
 
+    /**
+     * The selection made a link to `address`, or the address of the link the caret is in changed (an empty one takes
+     * that link away, leaving its text): blocks.insertLink.
+     */
     insertLink(address, title = '') {
-        if (address) this._run(() => blocks.insertLink(this.state, this.selection, address, title), 'block');
+        if (address === null || address === undefined) return;
+        this._run(() => blocks.insertLink(this.state, this.selection, String(address), title), 'block');
     }
 
     insertImage(address, description = '') {
         if (address) this._run(() => blocks.insertImage(this.state, this.selection, address, description), 'block');
     }
 
-    /** The link at the caret, if any: { destination, title, start, end } (source offsets). */
+    /**
+     * The link the caret (or the whole of the selection) is inside of, the one `insertLink` changes: { destination,
+     * title, start, end } (source offsets), or null.
+     */
     linkAtCaret() {
         this._syncFromView();
-        const p = this.state.paragraphAt(this.selection.caret);
-        let found = null;
-        const walk = (nodes) => {
-            for (const node of nodes ?? []) {
-                if (node.start > this.selection.caret || node.end < this.selection.caret) continue;
-                if (node.type === 'link' || node.type === 'autolink') found = node;
-                if (node.children) walk(node.children);
-            }
-        };
-        walk(p?.block?.inlines);
-        return found ? { destination: found.destination, title: found.title ?? null, start: found.start, end: found.end } : null;
+        const { anchor, caret } = this.selection;
+        const found = blocks.linkAt(this.state, Math.min(anchor, caret), Math.max(anchor, caret));
+        if (!found) return null;
+        return { destination: found.destination, title: found.title ?? null, start: found.start, end: found.end };
     }
 
     // ---- The one primitive ---------------------------------------------------------------------------------------------

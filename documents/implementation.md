@@ -720,9 +720,15 @@ pressed.
 - All three keep the caret and the selection at their places in the text (`rewriteAll`).
 - `insertRule`, `insertTable(columns, rows)` (its first header cell selected),
   `insertCodeBlock(language)`: a block after the block at the caret (or in place of an empty
-  paragraph), with the blank lines that keep it a block of its own. `insertLink(address)`
-  makes the selection (or the address) a link's text; `insertImage(address, description)`
-  writes a picture at the caret.
+  paragraph), with the blank lines that keep it a block of its own.
+  `insertImage(address, description)` writes a picture at the caret.
+- `insertLink(address, title)` is MaxPad's `SetLink` (Ctrl+K). In a link (`linkAt`: an
+  inline or reference link or an autolink, not a picture, whose syntax is round the caret or
+  the whole selection on both sides) it changes the link's address: its text and title kept
+  (the title given instead, if one is), a reference link or an autolink made an inline link,
+  its text selected after; an empty address takes the link away and leaves its text. Else the
+  selection (or the address) is made a link's text, `[text](address)`. An address with a
+  space or a bracket goes in angle brackets (`<` and `>` in it as `%3C` and `%3E`).
 
 ### 7.5 Undo and redo (`history.js`)
 
@@ -1025,7 +1031,13 @@ headings: the outline marks, section 4.11; off by default, the page's to offer).
   builds the toolbar again, so a page chooses which of the editor's items show, in its order.
   The demo's dark theme and read-only switches are such buttons.
 - **Links:** Ctrl+click raises `linkclick` (`detail.href`, `detail.title`); unless the page
-  cancels it, an `http`, `https` or `mailto` link opens in a new tab.
+  cancels it, an `http`, `https` or `mailto` link opens in a new tab. Ctrl+K (`promptLink`)
+  asks for the address with the link's own when the caret is in one (`linkAtCaret`), else
+  with `https://`, and gives the answer to `insertLink` (section 7.4): cancelled, or just
+  `https://`, it does nothing; an empty answer in a link takes the link away.
+- **A read-only document is not undone or redone:** `undo()` and `redo()` do nothing while
+  `readOnly` is on (so neither do Ctrl+Z and Ctrl+Y), nor does the controller for the
+  browser's Edit menu (its `undo` and `redo` events from the view).
 - **Theme colors** for the frame and the toolbar are CSS variables on the root, set from the
   theme (dark or light by the background's brightness).
 - **What a page uses:** `value` (get and set), `getMarkdown`, `setMarkdown`, `version`,
@@ -1071,9 +1083,9 @@ the suites; `?steps=150` makes the random test longer.
 | `parser.test.js` | the block structure, lists, quotes, code, HTML, tables, front matter, definitions, line marks, inlines and their offsets |
 | `incremental.test.js` | a source read again in part, after thousands of random changes (characters that make and unmake every kind of block, typed and taken away) in documents of every kind, is what a whole reading makes of it: every line, mark, block, definition and paragraph, field by field; a change reads only the blocks around it; a definition makes it read whole |
 | `projection.test.js` | blank lines, hidden and shown syntax (`⟦hidden⟧`, `⟨concealed⟩`), styles, list markers, and that every paragraph is its stretch of the source and every position maps to the source and back |
-| `commands.test.js` | each editing rule, the formats and the paragraph types, written with `¦` for the caret and `«...»` for a selection, as MaxPad.Editing.Tests write theirs |
+| `commands.test.js` | each editing rule (Tab on bullets and numbered items among them), the formats, the paragraph types and the links (made, their address changed, taken away), written with `¦` for the caret and `«...»` for a selection, as MaxPad.Editing.Tests write theirs |
 | `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits, the gutter's numbers (a table's row one, its room taken and given back) and names (outside the numbers, on their line, the host's first, a long one cut); the outline (a heading folding what it heads, the caret stepping over it, a heading replaced by its like staying collapsed, a caret put in a fold opening it) |
-| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); a Markdown heading edited and undone staying collapsed; the page's own toolbar buttons; no syntax in a read-only editor |
+| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); a Markdown heading edited and undone staying collapsed; the page's own toolbar buttons; no syntax in a read-only editor, and no undo or redo in it; Ctrl+K in a link; Tab on a numbered item |
 | `raw.test.js` | the raw view's paragraphs and its map to the source (every offset there and back); looking that changes nothing; text changed in it as one undo step; no formats in it; the paragraph numbers and types of the two views agreeing, a line's type following its text |
 
 After every command `editor.test.js` checks what MaxPad.Editing.Tests check: the view's

@@ -337,6 +337,71 @@ test('a read-only editor shows no syntax at the caret', async () => {
     equal(shown(1), true, 'editable again: shown');
 });
 
+test('Ctrl+K in a link asks with its address and changes it; an empty answer takes the link away', async () => {
+    const stage = document.getElementById('stage');
+    stage.replaceChildren();
+    const asked = [];
+    let answer = 'https://new.org';
+    const prompt = async (question, value) => {
+        asked.push(value);
+        return answer;
+    };
+    const editor = new MarkdownEditor(stage, {
+        markdown: 'see [docs](https://old.org) here', toolbar: false, revealUnfocused: true, prompt,
+    });
+    editor.focus();
+    editor.select(6);
+    await press(editor, 'k', { ctrlKey: true });
+    await tick();
+    equal([asked, editor.value], [['https://old.org'], 'see [docs](https://new.org) here'], 'the address changed');
+    equal(editor.selection, { anchor: 5, caret: 9 }, 'the link\'s text selected');
+    answer = null;
+    await press(editor, 'k', { ctrlKey: true });
+    await tick();
+    equal(editor.value, 'see [docs](https://new.org) here', 'cancelled: nothing');
+    answer = '';
+    await press(editor, 'k', { ctrlKey: true });
+    await tick();
+    equal(editor.value, 'see docs here', 'an empty address: the text left');
+    checkView(editor);
+    editor.undo();
+    equal(editor.value, 'see [docs](https://new.org) here', 'one step each');
+});
+
+test('Tab on a numbered item nests it, numbered 1', async () => {
+    const editor = makeEditor('1. a\n2. b');
+    editor.select(8);
+    await press(editor, 'Tab');
+    equal(editor.value, '1. a\n   1. b');
+    checkView(editor);
+    await press(editor, 'Tab', { shiftKey: true });
+    equal(editor.value, '1. a\n2. b', 'and Shift+Tab takes it out again');
+});
+
+test('a read-only editor undoes and redoes nothing', async () => {
+    const editor = makeEditor('abc');
+    editor.select(3);
+    await type(editor, 'd');
+    editor.undo();
+    editor.redo();
+    editor.readOnly = true;
+    await press(editor, 'z', { ctrlKey: true });
+    equal(editor.value, 'abcd', 'Ctrl+Z');
+    editor.undo();
+    equal(editor.value, 'abcd', 'undo()');
+    const menu = new InputEvent('beforeinput', { inputType: 'historyUndo', cancelable: true });
+    editor.view.input.dispatchEvent(menu);
+    await tick();
+    equal(editor.value, 'abcd', 'the browser\'s Edit menu');
+    editor.readOnly = false;
+    editor.undo();
+    equal(editor.value, 'abc', 'editable again: undone');
+    editor.readOnly = true;
+    await press(editor, 'y', { ctrlKey: true });
+    equal(editor.value, 'abc', 'Ctrl+Y');
+    editor.readOnly = false;
+});
+
 // Random commands on documents of every kind: the view stays what the source says, and everything undoes to the
 // document it began as and redoes to the one it ended as.
 const DOCUMENTS = [

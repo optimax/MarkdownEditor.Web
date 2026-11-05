@@ -3,6 +3,7 @@
 // inserts (a rule, a table, a block of code, a link, a picture). Each gives `{ source, caret, anchor }` or null.
 
 import { MarkdownState, lineEndOf } from './state.js';
+import { contentOf } from './commands.js';
 
 export const BLOCK_TYPES = ['paragraph', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'quote', 'bullet', 'number', 'task', 'code'];
 
@@ -264,14 +265,54 @@ export function insertCodeBlock(state, selection, language = '') {
     return { ...placed, anchor: placed.caret };
 }
 
-/** A link: the selection made its text (or the address its own text), `[text](address)`. */
+/**
+ * A link (MaxPad's SetLink, Ctrl+K). In a link -- the caret, or the whole of the selection, inside it -- its address
+ * changed: its text and its title kept (the title given instead, if one is), a reference link or an autolink made an
+ * inline link, and its text selected; an empty address takes the link away and leaves its text, selected. Elsewhere the
+ * selection made the text of a link to the address (or the address its own text), `[text](address)`, the caret after it.
+ */
 export function insertLink(state, selection, address, title = '') {
     const [a, b] = order(selection);
-    const text = state.source.slice(a, b) || address;
-    const destination = /[\s()<>]/.test(address) ? `<${address}>` : address;
-    const link = `[${text}](${destination}${title ? ` "${title.replace(/"/g, '\\"')}"` : ''})`;
-    const source = state.replaced(a, b, link);
-    return { source, caret: a + link.length, anchor: a + link.length };
+    const link = linkAt(state, a, b);
+    if (link) {
+        const [textStart, textEnd] = contentOf(link);
+        const label = state.source.slice(textStart, textEnd);
+        const written = address ? writtenLink(label, address, title || link.title || '') : label;
+        const labelStart = address ? link.start + 1 : link.start;
+        const source = state.replaced(link.start, link.end, written);
+        return { source, anchor: labelStart, caret: labelStart + label.length };
+    }
+    if (!address) return null;
+    const written = writtenLink(state.source.slice(a, b) || address, address, title);
+    const source = state.replaced(a, b, written);
+    return { source, caret: a + written.length, anchor: a + written.length };
+}
+
+/**
+ * The link the caret, or the whole of a selection, is inside of (MaxPad's LinkAt): an inline or a reference link or an
+ * autolink -- not a picture -- whose syntax is round [a, b] on both sides. Null when there is none.
+ */
+export function linkAt(state, a, b = a) {
+    const block = state.paragraphAt(a)?.block;
+    if (!block) return null;
+    let found = null;
+    const walk = (nodes) => {
+        for (const node of nodes ?? []) {
+            if (node.end < a || node.start > b) continue;
+            if ((node.type === 'link' || node.type === 'autolink') && node.start < a && b < node.end) found = node;
+            if (node.children) walk(node.children);
+        }
+    };
+    walk(block.inlines);
+    if (block.rows) for (const row of block.rows) for (const cell of row.cells) walk(cell.inlines);
+    return found;
+}
+
+// A link as it is written: `[label](address "title")`, the address in angle brackets when it has a space or a bracket.
+function writtenLink(label, address, title) {
+    const destination = /[\s()<>]/.test(address) ? `<${address.replace(/</g, '%3C').replace(/>/g, '%3E')}>` : address;
+    const titled = title ? ` "${title.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"` : '';
+    return `[${label}](${destination}${titled})`;
 }
 
 /** A picture, `![description](address)`, at the caret. */

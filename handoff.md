@@ -16,7 +16,7 @@ how the editor works updates that document in the same commit.
 the user: "Write a comprehensive user manual, with lots of examples, including a getting
 started section"): getting started, Part I for writers, Part II for the pages that embed it,
 appendices. A change to what a user sees or a page uses updates it too; its chapter 38
-lists the known bugs and limits, and a fix takes its entry off.
+lists the known limits, and a fix takes its entry off.
 
 ## State (2026-11-03)
 
@@ -68,6 +68,13 @@ another option"): the control's `StyleNames`, MaxPad's View > Paragraph Types, l
 numbers; `showParagraphTypes` on the editor, off by default; in the raw view each line is
 named by the block it begins in the formatted view. See the document's sections 4.10 and 9.
 
+Three bugs found while writing the manual, fixed (2026-11-04, the user: "Yes, fix them"):
+Tab on a numbered item wrote `1  2. b` (in `indentItem`, the renumbering and the indentation
+at one offset were applied in the wrong order); Ctrl+K in a link nested a new link in it
+(now MaxPad's `SetLink`: the link's address changed, an empty one takes the link away;
+`blocks.insertLink`, `linkAt`); Ctrl+Z, Ctrl+Y and the browser's Edit menu undid in a
+read-only editor. See the document's sections 7.4 and 11.
+
 ## Design decisions
 
 The decisions are in `documents/implementation.md`; the ones a new session needs first:
@@ -87,8 +94,8 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Verification
 
-- `test/index.html`: 65 passed, 0 failed (Chrome, in the Claude desktop app's browser).
-  `?steps=150` ran the random test clean as well.
+- `test/index.html`: 70 passed, 0 failed (Chrome, in the Claude desktop app's browser,
+  2026-11-04). `?steps=150` ran the random test clean as well.
 - Tried by hand in the browser: typing, the syntax at the caret, Enter in a list and a
   quote, a task's box clicked, a word double-clicked and made bold from the toolbar, the
   code fences shown together, copy, cut and paste, the dark theme, the element in a form,
@@ -106,16 +113,8 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Next steps
 
-1. Three bugs found while writing the manual (2026-11-04; its chapter 38):
-   - Tab on a numbered item gives `1. a` / `1  2. b`: in `indentItem` (`commands.js`) the
-     indentation and the renumbering are edits at the same offset, applied in the wrong
-     order. No test covers an ordered item's Tab.
-   - Ctrl+K with the caret in a link nests a new link in it (`promptLink` offers the link's
-     address, `insertLink` then wraps the selection, which is empty).
-   - Ctrl+Z and Ctrl+Y undo and redo in a read-only editor (`MarkdownEditor.undo`, `redo`
-     do not check `readOnly`; the toolbar's buttons are off).
-2. Firefox and Safari, mobile keyboards and input methods, tried by hand.
-3. Table commands, code highlighting, find and replace; the raw view's own stylesheet
+1. Firefox and Safari, mobile keyboards and input methods, tried by hand.
+2. Table commands, code highlighting, find and replace; the raw view's own stylesheet
    (MaxPad's).
-4. Adapt `AGENTS.md`, now a copy of MarkdownTools' (WPF and .NET rules), to this project:
+3. Adapt `AGENTS.md`, now a copy of MarkdownTools' (WPF and .NET rules), to this project:
    the user's decision.

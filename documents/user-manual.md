@@ -391,7 +391,7 @@ and buttons of its own (the demo adds three): chapter 31.
 | Numbered list | `1. `, `2. ` items | Ctrl+Shift+7 |
 | Task list | `- [ ] ` items | Ctrl+Shift+9 |
 | Code block | ```` ``` ```` fences around the paragraphs | Ctrl+Alt+C |
-| Link | Asks for an address; the selection becomes the link's text | Ctrl+K |
+| Link | Asks for an address; the selection becomes the link's text, or the link the caret is in gets the new address | Ctrl+K |
 | Picture | Asks for a picture's address, and puts the picture at the caret | |
 | Table | A table of three columns and two rows after the paragraph | |
 | Horizontal line | A `---` line after the paragraph | Ctrl+Alt+L |
@@ -822,6 +822,21 @@ Tab:
   - ¦Apples
 ```
 
+A numbered item put in another starts a list of its own, numbered 1; Shift+Tab gives it its
+number in the outer list back:
+
+```markdown
+1. Prepare the dough
+2. ¦Let it rest
+```
+
+Tab:
+
+```markdown
+1. Prepare the dough
+   1. ¦Let it rest
+```
+
 An item can hold paragraphs, quotes, code and lists of its own: each line is indented to
 where the item's text starts.
 
@@ -971,12 +986,30 @@ its own (chapter 32).
 
 ### 17.2 Changing a link
 
-Put the caret in the link: its syntax shows, `[guide](https://example.com/guide)`, and you
-edit the text and the address in place, as any other text. Deleting the brackets and the
-address leaves the text, as text.
+**Ctrl+K with the caret in a link** (or with some of its text selected) asks for the address
+with the link's own in the question, and changes it. The link's text and title stay as they
+are, and its text is selected afterwards.
 
-(Ctrl+K with the caret inside a link does not change the link yet: it puts a new link inside
-it. Edit the address in place instead: chapter 38.)
+```markdown
+Read the [gu¦ide](https://example.com/guide).
+```
+
+Ctrl+K, `https://example.com/manual`:
+
+```markdown
+Read the [«guide»](https://example.com/manual).
+```
+
+**An empty answer takes the link away** and leaves its text, as text. Cancelling the
+question changes nothing.
+
+A reference link (`[text][ref]`) or an address written as its own link
+(`<https://example.com>`) whose address is changed this way becomes an ordinary link,
+`[text](new address)`.
+
+You can also put the caret in the link and edit it in place: its syntax shows,
+`[guide](https://example.com/guide)`, and the text and the address are edited as any other
+text.
 
 ### 17.3 Following a link
 
@@ -1395,7 +1428,7 @@ document or in the raw Markdown view.
 | `insertTable(columns, rows)` | A table after the paragraph (3 and 2 if not given). |
 | `insertRule()` | A horizontal line after the paragraph. |
 | `insertCodeBlock(language)` | An empty block of code after the paragraph, with its language; with a selection, the selected paragraphs in a block. |
-| `insertLink(address, title)` | The selection made a link to `address` (with a title, if given). |
+| `insertLink(address, title)` | The selection made a link to `address` (with a title, if given); in a link, its address changed instead, and an empty address takes the link away (chapter 17.2). |
 | `insertImage(address, description)` | A picture at the caret. |
 | `promptLink()`, `promptImage()` | Ask for the address (chapter 32), then as above. |
 | `undo()`, `redo()` | A step back or forward. `canUndo` and `canRedo` say whether there is one. |
@@ -1651,8 +1684,9 @@ function ask(question, value) {
 const editor = new MarkdownEditor('#editor', { prompt: ask });
 ```
 
-The questions are `'Link address:'` (starting with `https://`, or the address of the link at
-the caret) and `'Picture address:'`. An answer of just `https://` makes no link.
+The questions are `'Link address:'` (starting with `https://`, or the address of the link the
+caret is in) and `'Picture address:'`. An answer of just `https://` makes no link; an empty
+answer, with the caret in a link, takes the link away.
 
 A picture picker of your own, that uploads a file and gives its address:
 
@@ -1702,11 +1736,13 @@ folder by itself.
 ## 34. Read-only documents
 
 `readOnly: true` (or `editor.readOnly = true`) makes the document one that is read, not
-changed: no typing, no formats, and the Undo and Redo buttons off. Selecting and copying
-still work, Ctrl+click still follows links, and the view buttons (marks, numbers, types, the
-raw view, the zoom) still work. The syntax at the caret is not shown, so the document reads
-as formatted text. (Ctrl+Z still undoes in a read-only editor that was edited before:
-chapter 38.)
+changed: no typing, no formats, no undo or redo (by key, by button, by the browser's Edit
+menu, or by `undo()` and `redo()`). Selecting and copying still work, Ctrl+click still
+follows links, and the view buttons (marks, numbers, types, the raw view, the zoom) still
+work. The syntax at the caret is not shown, so the document reads as formatted text.
+
+The undo history is kept: an editor made read-only and then editable again undoes what was
+done before.
 
 A viewer for Markdown, with no toolbar:
 
@@ -2094,13 +2130,6 @@ milliseconds. Nothing needs to be done for it.
   them is there. On a Mac, Cmd should do what Ctrl does; that has not been tried either.
 - **Tables:** no commands to add or delete columns, delete rows or set alignment; use the
   raw Markdown view.
-- **Ctrl+K inside a link** puts a new link inside it, rather than changing the link's
-  address. Change the address in place (chapter 17.2).
-- **Tab on a numbered item**, to put it in the item above, writes the item's indentation
-  wrongly (`1  2. b` rather than `   1. b`). Bullets nest correctly. Until this is fixed,
-  indent numbered items in the raw Markdown view.
-- **Ctrl+Z in a read-only editor** still undoes what was done before it was made read-only
-  (the toolbar's Undo button is off, as it should be).
 - **Code is not colored** by its language.
 - **Pictures** cannot be pasted or dropped in; text cannot be dragged and dropped.
 - **Pasting** takes the clipboard's plain text: formats copied from a web page or a word

@@ -523,7 +523,8 @@ function indentItem(state, p) {
     let caret = p.contentStart;
     const edits = inserts.map((at) => ({ at, length: 0, text: ' '.repeat(width) }));
     if (renumber) edits.push({ at: renumber.at, length: renumber.length, text: renumber.text });
-    edits.sort((x, y) => y.at - x.at);
+    // (from the end; at the same offset, the number replaced before the indentation goes in front of it)
+    edits.sort((x, y) => y.at - x.at || y.length - x.length);
     for (const edit of edits) {
         source = source.slice(0, edit.at) + edit.text + source.slice(edit.at + edit.length);
         if (edit.at < caret) caret += edit.text.length - edit.length;

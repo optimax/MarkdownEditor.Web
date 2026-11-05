@@ -418,14 +418,19 @@ export class MarkdownEditor extends EventTarget {
 
     // ---- Commands ----------------------------------------------------------------------------------------------------
 
-    /** Undoes a step: of the document's history, or in the raw view of its own (an edit at a time). */
+    /**
+     * Undoes a step: of the document's history, or in the raw view of its own (an edit at a time). Nothing in a read-only
+     * document, which undo would change (the keys and the browser's Edit menu as well as the toolbar).
+     */
     undo() {
+        if (this.readOnly) return;
         if (this.raw.isOn) this.raw.undo();
         else this.controller.undo();
         this._refreshToolbar();
     }
 
     redo() {
+        if (this.readOnly) return;
         if (this.raw.isOn) this.raw.redo();
         else this.controller.redo();
         this._refreshToolbar();
@@ -480,6 +485,10 @@ export class MarkdownEditor extends EventTarget {
         if (this._canFormat) this.controller.insertCodeBlock(language);
     }
 
+    /**
+     * The selection made a link to `address` (with `title`, if given); in a link, that link's address changed instead,
+     * its text and title kept, and an empty address takes the link away, leaving its text (MaxPad's Ctrl+K).
+     */
     insertLink(address, title = '') {
         if (this._canFormat) this.controller.insertLink(address, title);
     }
@@ -488,13 +497,19 @@ export class MarkdownEditor extends EventTarget {
         if (this._canFormat) this.controller.insertImage(address, description);
     }
 
-    /** Asks for a link's address (the page's `prompt`, or the browser's) and makes the selection a link to it. */
+    /**
+     * Asks for a link's address (the page's `prompt`, or the browser's) and makes the selection a link to it; in a link,
+     * asks with its address and changes it (an empty answer takes the link away). Cancelled, or answered with just
+     * "https://", it does nothing.
+     */
     async promptLink() {
         if (!this._canFormat) return;
         const current = this.controller.linkAtCaret();
-        const address = await this._ask('Link address:', current?.destination ?? 'https://');
+        const answer = await this._ask('Link address:', current?.destination ?? 'https://');
         this.focus();
-        if (address && address !== 'https://') this.insertLink(address.trim());
+        if (answer === null || answer === undefined) return;
+        const address = String(answer).trim();
+        if (address !== 'https://') this.insertLink(address);
     }
 
     async promptImage() {
