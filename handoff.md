@@ -12,6 +12,12 @@ have the basic functionality of the VirtualTextView and be pluggable into web pa
 user, 2026-11-03: "Keep this document in sync as changes are implemented." Every change to
 how the editor works updates that document in the same commit.
 
+**What it does is in [`documents/user-manual.md`](documents/user-manual.md)** (2026-11-04,
+the user: "Write a comprehensive user manual, with lots of examples, including a getting
+started section"): getting started, Part I for writers, Part II for the pages that embed it,
+appendices. A change to what a user sees or a page uses updates it too; its chapter 38
+lists the known bugs and limits, and a fix takes its entry off.
+
 ## State (2026-11-03)
 
 In the repository (GitHub: optimax/MarkdownEditor.Web):
@@ -68,7 +74,8 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 - The source is the authority, and the view's text is the source of each block's lines with
   the syntax hidden: the map between view and source is offset arithmetic.
-- Each edit parses and projects the whole document again (section 14 of the document).
+- Each edit reads and projects again only the blocks it can have changed (sections 7.6 and
+  14 of the document).
 - An editor without the focus shows no syntax (`revealUnfocused: true` keeps MaxPad's way).
 - Keys are MaxPad's (2026-11-03, the user: "Ctrl+Number keys don't work"); see the
   document's section 11.
@@ -99,8 +106,16 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Next steps
 
-1. Firefox and Safari, mobile keyboards and input methods, tried by hand.
-2. Table commands, code highlighting, find and replace; the raw view's own stylesheet
+1. Three bugs found while writing the manual (2026-11-04; its chapter 38):
+   - Tab on a numbered item gives `1. a` / `1  2. b`: in `indentItem` (`commands.js`) the
+     indentation and the renumbering are edits at the same offset, applied in the wrong
+     order. No test covers an ordered item's Tab.
+   - Ctrl+K with the caret in a link nests a new link in it (`promptLink` offers the link's
+     address, `insertLink` then wraps the selection, which is empty).
+   - Ctrl+Z and Ctrl+Y undo and redo in a read-only editor (`MarkdownEditor.undo`, `redo`
+     do not check `readOnly`; the toolbar's buttons are off).
+2. Firefox and Safari, mobile keyboards and input methods, tried by hand.
+3. Table commands, code highlighting, find and replace; the raw view's own stylesheet
    (MaxPad's).
-3. Adapt `AGENTS.md`, now a copy of MarkdownTools' (WPF and .NET rules), to this project:
+4. Adapt `AGENTS.md`, now a copy of MarkdownTools' (WPF and .NET rules), to this project:
    the user's decision.

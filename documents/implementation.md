@@ -9,6 +9,9 @@ editing rules are the ones `Documents/maxpad-editing.md` and `Documents/maxpad-p
 in MarkdownTools give, and its view is a browser version of `OptimaxTools.RichText`'s
 `VirtualTextView`. Where it differs from them, this document says so and why.
 
+What the editor does for the people who write in it and for the pages that put it in, with
+examples, is in the [user manual](user-manual.md).
+
 ------
 
 ## 1. What it is
@@ -1127,4 +1130,6 @@ not of the time a key takes). Measure timings with the page in sight.
 This document describes the source as it is. Every change to how the editor works updates it
 in the same change: what a module does, a rule of the projection or the editing, a key, an
 option, an event, a test suite, a measured cost. A change that makes a section wrong is not
-done until the section is right again.
+done until the section is right again. A change to what a user sees or a page uses (a key,
+a rule of the editing, an option, a method, an event, a class) updates the
+[user manual](user-manual.md) as well, and a fixed limit comes off its chapter 38.

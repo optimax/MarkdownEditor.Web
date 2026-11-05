@@ -51,6 +51,11 @@ Or, with no script of your own:
 
 The editor fills the element it is put in, so give that element a height.
 
+**The [user manual](documents/user-manual.md)** says everything the editor does, with
+examples: getting started, writing in it (every key, every kind of Markdown, the raw view),
+and building it into a page (options, methods, events, the toolbar, themes and stylesheets,
+the element, recipes).
+
 To run the demos and the tests on Windows, with nothing installed but PowerShell:
 
 ```bash
