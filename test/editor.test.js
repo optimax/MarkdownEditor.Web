@@ -402,6 +402,41 @@ test('a read-only editor undoes and redoes nothing', async () => {
     editor.readOnly = false;
 });
 
+test('the toolbar is one Tab stop, its arrows going from control to control; Alt+F10 and Escape', () => {
+    const stage = document.getElementById('stage');
+    stage.replaceChildren();
+    const toolbar = ['undo', 'redo', '|', 'block', 'strong', 'em', 'raw'];
+    const editor = new MarkdownEditor(stage, { markdown: 'abc', toolbar });
+    editor.select(1);
+    const controls = [...editor.toolbar.querySelectorAll('button, select')];
+    const stop = () => controls.map((control) => control.tabIndex).indexOf(0);
+    const focused = () => controls.indexOf(document.activeElement);
+    const key = (target, key, more = {}) => {
+        const event = new KeyboardEvent('keydown', { key, code: key, bubbles: true, cancelable: true, ...more });
+        target.dispatchEvent(event);
+        return event.defaultPrevented;
+    };
+    equal(stop(), 2, 'the Tab stop: the first control that can be used (nothing to undo or redo)');
+    key(editor.view.input, 'F10', { altKey: true });
+    equal(focused(), 2, 'Alt+F10 in the text');
+    const moves = ['ArrowRight', 'End', 'ArrowRight', 'ArrowLeft', 'Home'].map((name) => {
+        key(document.activeElement, name);
+        return [focused(), stop()];
+    });
+    equal(moves, [[3, 3], [5, 5], [2, 2], [5, 5], [2, 2]], 'the arrows, End, Home, round the ends');
+    key(document.activeElement, 'ArrowRight');
+    key(document.activeElement, 'Escape');
+    equal(document.activeElement === editor.view.input, true, 'Escape: back to the text');
+    key(editor.view.input, 'F10', { altKey: true });
+    equal(focused(), 3, 'Alt+F10 again: the control last in use');
+    editor.focus();
+    equal(key(editor.view.input, 'Tab'), true, 'Tab is the text\'s');
+    key(editor.view.input, 'Escape');
+    equal(key(editor.view.input, 'Tab'), false, 'Escape, then Tab: the browser\'s, out of the text');
+    equal(key(editor.view.input, 'Tab'), true, 'and the text\'s again after');
+    editor.destroy();
+});
+
 test('a file dropped on the editor is not opened in place of the page; a page may take it', () => {
     const stage = document.getElementById('stage');
     stage.replaceChildren();

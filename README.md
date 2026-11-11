@@ -121,6 +121,7 @@ What a page reads and calls:
 | `theme`, `zoom` | Change the look, or the scale, at any time. |
 | `zoomIn()`, `zoomOut()` | 10% larger or smaller (the toolbar's + and -); `resetZoom()`: 100%. |
 | `readOnly`, `focus()` | As their names say. |
+| `focusToolbar()` | The focus to the toolbar (Alt+F10), its button last used. |
 | `destroy()` | Takes the editor out of the page. |
 
 Events (`addEventListener`): `change` after each change of the Markdown, `selectionchange`,
@@ -200,6 +201,8 @@ The document is centered in the editor and at most 720 px wide (at 100%): the pa
 | Ctrl+Alt+Q, C, L | Quote, code block, horizontal line |
 | Ctrl+Z, Ctrl+Y | Undo, redo |
 | Ctrl+Shift+R | The raw Markdown view on or off |
+| Alt+F10 | To the toolbar: Left and Right in it, Escape back |
+| Escape, then Tab | Out of the editor (Tab alone indents) |
 | Ctrl and the mouse wheel | Zoom (about 2% a notch) |
 
 The keys are MaxPad's. A browser gives the page Ctrl+1 to Ctrl+6 before it switches tabs with

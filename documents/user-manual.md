@@ -409,6 +409,12 @@ to undo or redo.
 The buttons do not take the focus: after a click, the caret is where it was, and you go on
 typing.
 
+**From the keyboard**, Alt+F10 in the text goes to the toolbar. Left and Right go from button
+to button (Home and End to the first and the last), Enter or Space presses one and goes back
+to the text, and Escape goes back without pressing anything. The toolbar is one stop of Tab:
+it comes back to the button last used. Since Tab is the editor's own (it indents), Escape and
+then Tab leave the editor, Escape and then Shift+Tab go back to what is before it.
+
 In a read-only document only the buttons that change the view (the marks, the numbers, the
 types, the Markdown source and the zoom) are on. In the raw Markdown view only those, Undo
 and Redo are.
@@ -1311,6 +1317,8 @@ page; the browser's own page zoom is not touched by Ctrl and the wheel over the 
 | Ctrl+Home, Ctrl+End | The start or end of the document |
 | Ctrl+A | Select all |
 | Escape | Drop the selection |
+| Escape, then Tab or Shift+Tab | Leave the editor (Tab alone is the editor's) |
+| Alt+F10 | To the toolbar (Escape comes back) |
 | Ctrl+Shift+R | The raw Markdown view on or off |
 | Ctrl and the mouse wheel | Zoom |
 
@@ -1393,6 +1401,7 @@ editor.zoom = 1.25;   // 125%
 | `blockType` | The type of the paragraph at the caret (below). |
 | `paragraphNumber` | The number of the paragraph at the caret, as the paragraph numbers count: for a status bar. |
 | `focus()` | Gives the editor the focus. |
+| `focusToolbar()` | Gives the toolbar the focus, at its button last used (Alt+F10; chapter 8). |
 | `destroy()` | Takes the editor out of the page. |
 
 **Offsets** count the characters of the Markdown from 0, with each line ending counted as one

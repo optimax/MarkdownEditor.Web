@@ -593,6 +593,7 @@ export class MarkdownEditor extends EventTarget {
         keys.set('Ctrl+Alt+Q', run(() => this.setBlockType('quote')));
         keys.set('Ctrl+Alt+C', run(() => this.setBlockType('code')));
         keys.set('Ctrl+Alt+L', run(() => this.insertRule()));
+        keys.set('Alt+F10', run(() => this.focusToolbar())); // (the toolbar's key in editors of the web)
         // (the zoom has no keys, as MaxPad's: Ctrl and the mouse wheel zoom, about 2% a notch)
         this.view.scroller.addEventListener('wheel', (event) => {
             if (!event.ctrlKey) return;
@@ -697,6 +698,55 @@ export class MarkdownEditor extends EventTarget {
         }
         this.root.insertBefore(bar, this.body);
         this.toolbar = bar;
+        // (one Tab stop: the arrow keys, Home and End go from control to control, Escape back to the text)
+        bar.addEventListener('keydown', (event) => this._onToolbarKey(event));
+        bar.addEventListener('focusin', (event) => this._rove(event.target));
+        this._rove(null);
+    }
+
+    /** Gives the focus to the toolbar (Alt+F10 in the text): its control that was last in use, or its first. */
+    focusToolbar() {
+        if (!this.toolbar) return;
+        this._rove(null);
+        this._toolbarControls().find((control) => control.tabIndex === 0)?.focus();
+    }
+
+    // The toolbar's controls that can take the focus, in order.
+    _toolbarControls() {
+        return this.toolbar ? [...this.toolbar.querySelectorAll('button, select')].filter((c) => !c.disabled) : [];
+    }
+
+    // The toolbar is one Tab stop (WAI-ARIA's toolbar): `control` is the one with tabIndex 0, the others -1; null keeps
+    // the one there is, or takes the first that can be used when it cannot.
+    _rove(control) {
+        if (!this.toolbar) return;
+        const all = [...this.toolbar.querySelectorAll('button, select')];
+        const usable = all.filter((c) => !c.disabled);
+        let current = control && usable.includes(control) ? control : all.find((c) => c.tabIndex === 0);
+        if (!current || current.disabled) current = usable[0] ?? null;
+        for (const c of all) c.tabIndex = c === current ? 0 : -1;
+    }
+
+    _onToolbarKey(event) {
+        if (event.altKey || event.ctrlKey || event.metaKey) return;
+        const controls = this._toolbarControls();
+        const at = controls.indexOf(document.activeElement);
+        let next = null;
+        switch (event.key) {
+            case 'ArrowRight': next = controls[(at + 1) % controls.length]; break;
+            case 'ArrowLeft': next = controls[(at - 1 + controls.length) % controls.length]; break;
+            case 'Home': next = controls[0]; break;
+            case 'End': next = controls[controls.length - 1]; break;
+            case 'Escape':
+                event.preventDefault();
+                this.focus();
+                return;
+            default: return;
+        }
+        if (!next) return;
+        event.preventDefault();
+        this._rove(next);
+        next.focus();
     }
 
     // A button of the page's own (`toolbarItems`): drawn as the editor's are, its click the page's.
@@ -730,7 +780,10 @@ export class MarkdownEditor extends EventTarget {
             if (pressed === true || pressed === false) button.setAttribute('aria-pressed', String(pressed));
             if (item.enabled) button.disabled = !item.enabled(this);
         }
-        if (!this.buttons?.size && !this.blockSelect) return;
+        if (!this.buttons?.size && !this.blockSelect) {
+            this._rove(null);
+            return;
+        }
         const readOnly = this.readOnly, raw = this.raw.isOn;
         const type = this.blockType;
         for (const [item, button] of this.buttons) {
@@ -758,6 +811,7 @@ export class MarkdownEditor extends EventTarget {
             this.blockSelect.value = known ? type : 'paragraph';
             this.blockSelect.disabled = readOnly || raw;
         }
+        this._rove(null); // (the toolbar's Tab stop stays on a control that can be used)
     }
 
     _applyThemeColors() {

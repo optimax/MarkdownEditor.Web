@@ -284,7 +284,12 @@ The browser lays the text out; the view reads the geometry back with DOM ranges.
   as a chord, "Ctrl+Shift+Z", from `keyChord`, which names letters and digits by where they
   are on the keyboard), then looks in `keymap`; then the view's own keys: the arrows, Home,
   End, Page Up and Down (with Shift to extend, Ctrl for words and the document's ends),
-  Enter, Shift+Enter, Backspace, Delete, Tab with `acceptsTab`, Escape, Ctrl+A.
+  Enter, Shift+Enter, Backspace, Delete, Tab with `acceptsTab`, Escape, Ctrl+A. Escape with
+  nothing selected makes the next key, if it is Tab or Shift+Tab, the browser's: the focus
+  leaves the view (`_escaped`), which Tab with `acceptsTab` would else never let it do.
+- **A screen reader** reads the paragraphs drawn as the text they show: a hidden run (syntax)
+  is `aria-hidden`. The text area that has the focus holds nothing of the document yet
+  (TO-DO "Screen Readers and the Keyboard in the Toolbar").
 - **Typing** arrives as `beforeinput` (`insertText`), which the view cancels and turns into
   the `insertText` command; deleting from a phone's keyboard arrives the same way.
   `historyUndo` and `historyRedo` (the browser's Edit menu) become `undo` and `redo` events.
@@ -1013,6 +1018,7 @@ headings: the outline marks, section 4.11; off by default, the page's to offer).
   | Ctrl+Shift+7, 8, 9 | numbered list, bullet list, task list |
   | Ctrl+Alt+Q, C, L | quote, code block, horizontal line |
   | Ctrl+Shift+R | the raw Markdown view on or off (`toggleRawMode`) |
+  | Alt+F10 | the focus to the toolbar (`focusToolbar`), as in the editors of the web |
 
   A browser gives a page Ctrl+1 to Ctrl+6 before it switches tabs with them, and switches
   none when the page takes them; Ctrl+Shift+R too, before it reloads the page (MaxPad's
@@ -1036,7 +1042,13 @@ headings: the outline marks, section 4.11; off by default, the page's to offer).
   the paragraph numbers, the paragraph types and the raw Markdown view, which are on in a
   read-only document too; while the raw view is on, only undo, redo and those are on. (The
   outline marks' item, `'outline'`, is such a switch too, but not in `DEFAULT_TOOLBAR`: a page
-  offers it by name, or with a button of its own, as the demo does.)
+  offers it by name, or with a button of its own, as the demo does.) **From the keyboard** it
+  is one Tab stop, as WAI-ARIA's toolbar is (`_rove`): one control, the last in use or the
+  first that can be used, has `tabIndex` 0 and the others -1; Left and Right go to the
+  control before or after (round the ends), Home and End to the first and last, skipping
+  those that are off; Escape goes back to the text. Alt+F10 in the text goes to it
+  (`focusToolbar()`). Its buttons, pressed with Enter or Space, put the focus back in the
+  text, as a click does.
 - **The page's own buttons** (2026-11-03, the user: custom buttons with SVG glyphs that look
   like the editor's, and the page choosing which of the editor's show): an item of the
   toolbar's list may be an object, `{ name, title, icon, label, onClick, pressed, enabled,
@@ -1111,7 +1123,7 @@ the suites; `?steps=150` makes the random test longer.
 | `projection.test.js` | blank lines, hidden and shown syntax (`⟦hidden⟧`, `⟨concealed⟩`), styles, list markers, and that every paragraph is its stretch of the source and every position maps to the source and back |
 | `commands.test.js` | each editing rule (Tab on bullets and numbered items among them; pipes and backslashes typed, pasted or taken out of a table cell, the row keeping its cells), the formats, the paragraph types, the links (made, their address changed, taken away) and the pictures (their description and address escaped), written with `¦` for the caret and `«...»` for a selection, as MaxPad.Editing.Tests write theirs |
 | `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits, the gutter's numbers (a table's row one, its room taken and given back) and names (outside the numbers, on their line, the host's first, a long one cut); the outline (a heading folding what it heads, the caret stepping over it, a heading replaced by its like staying collapsed, a caret put in a fold opening it); a right-click (the text area under the pointer, the caret put outside the selection and the selection kept inside it, the menu's Copy, the text area back at the caret) |
-| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); a Markdown heading edited and undone staying collapsed; the page's own toolbar buttons; no syntax in a read-only editor, and no undo or redo in it; Ctrl+K in a link; Tab on a numbered item; a file dropped on the text or the toolbar refused, a page's own listener after the editor's |
+| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); a Markdown heading edited and undone staying collapsed; the page's own toolbar buttons; no syntax in a read-only editor, and no undo or redo in it; Ctrl+K in a link; Tab on a numbered item; the toolbar from the keyboard (one Tab stop, the arrows, Home, End, Alt+F10, Escape) and Escape then Tab out of the text; a file dropped on the text or the toolbar refused, a page's own listener after the editor's |
 | `raw.test.js` | the raw view's paragraphs and its map to the source (every offset there and back); looking that changes nothing; text changed in it as one undo step; no formats in it; the paragraph numbers and types of the two views agreeing, a line's type following its text |
 | `element.test.js` | `<markdown-editor>`: the Markdown in a `<template>` read as written (a quote's `>`, an `&`, its HTML); a form's reset bringing back the Markdown each element was given, and the form sending it |
 

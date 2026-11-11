@@ -1496,7 +1496,10 @@ export class VirtualTextView extends EventTarget {
             for (const piece of pieces) {
                 if (piece.length === 0) continue;
                 const span = el('span', className ? 'vtv-run ' + className : 'vtv-run');
-                if (run.hidden) span.classList.add('vtv-hidden');
+                if (run.hidden) {
+                    span.classList.add('vtv-hidden');
+                    span.setAttribute('aria-hidden', 'true'); // (a screen reader reads the text as it is shown)
+                }
                 if (piece === SOFT_BREAK) span.classList.add('vtv-br');
                 if (run.link) {
                     span.classList.add('vtv-link');
@@ -2044,6 +2047,10 @@ export class VirtualTextView extends EventTarget {
 
     _onKeyDown(e) {
         if (this._composing || e.isComposing || e.keyCode === 229) return;
+        // (Escape with nothing selected, then Tab or Shift+Tab: the focus leaves the view, as the browser moves it, where
+        // Tab is else the view's)
+        const escaped = this._escaped;
+        this._escaped = false;
         const chord = keyChord(e);
         const keyEvent = new CustomEvent('key', { cancelable: true, detail: { chord, event: e } });
         this.dispatchEvent(keyEvent);
@@ -2092,7 +2099,7 @@ export class VirtualTextView extends EventTarget {
                 if (shift && !e.ctrlKey && this.selection) return this.cut();
                 return this._command(e.ctrlKey || e.altKey ? 'deleteWordForward' : 'delete');
             case 'Tab':
-                if (e.ctrlKey || e.altKey || e.metaKey) return;
+                if (e.ctrlKey || e.altKey || e.metaKey || escaped) return;
                 if (this._tabInTable(shift)) return handled();
                 if (!this.acceptsTab) return;
                 handled();
@@ -2101,6 +2108,8 @@ export class VirtualTextView extends EventTarget {
                 if (this.selection) {
                     handled();
                     this.setCaret(this.caret);
+                } else {
+                    this._escaped = true;
                 }
                 return;
             default:
@@ -2219,6 +2228,7 @@ export class VirtualTextView extends EventTarget {
     }
 
     _onMouseDown(e) {
+        this._escaped = false;
         if (e.button === 2 && !this._onScrollBar(e)) {
             e.preventDefault(); // (the focus stays in the text area: the menu that follows is its, `_onContextMenu`)
             this.focus();
