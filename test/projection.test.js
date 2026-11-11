@@ -73,3 +73,13 @@ test('list markers', () => {
     equal(viewRunsOf(first, 2, doc).listMarker, null, 'the caret on the item shows its own marker instead');
     equal(viewRunsOf(first, 2, doc).markerTextLength, 2);
 });
+
+test('a picture\'s alt is its description\'s plain text: no syntax, no escapes', () => {
+    const alt = (source) => project(parseMarkdown(source)).paragraphs[0].runs.find((run) => run.image).image.alt;
+    equal(alt('![a cat](x.png)'), 'a cat');
+    equal(alt('![a \\] b](x)'), 'a ] b');
+    equal(alt('![**bold** and `code`, *em*](x)'), 'bold and code, em');
+    equal(alt('![a [link](u) and ![inner](i)](x)'), 'a link and inner');
+    equal(alt('![one\ntwo](x)'), 'one two');
+    equal(alt('![](x)'), '');
+});

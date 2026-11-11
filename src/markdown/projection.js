@@ -516,6 +516,37 @@ function firstLeafOf(block) {
     return child ?? null;
 }
 
+/**
+ * The plain text of inlines, as CommonMark reads a picture's description for its `alt`: the text without its syntax --
+ * an escape's character, a code span's or an autolink's content, the text of emphasis, of a link and of a picture in
+ * it -- and a line break a space.
+ */
+export function plainText(nodes, source) {
+    let text = '';
+    for (const node of nodes) {
+        switch (node.type) {
+            case 'text':
+            case 'html':
+                text += source.slice(node.start, node.end);
+                break;
+            case 'escape':
+                text += source.slice(node.end - 1, node.end);
+                break;
+            case 'code':
+            case 'autolink':
+                text += source.slice(node.contentStart, node.contentEnd);
+                break;
+            case 'softbreak':
+            case 'hardbreak':
+                text += ' ';
+                break;
+            default:
+                if (node.children) text += plainText(node.children, source);
+        }
+    }
+    return text;
+}
+
 // A paragraph of one picture and nothing else (a link around it, and white space, allowed).
 function isImageOnly(inlines) {
     const meaningful = inlines.filter((node) => !(node.type === 'text' && node.start === node.end));
@@ -603,7 +634,7 @@ class Builder {
                 this.syntax(node.start, node.end, node);
                 if (node.start >= this.start && node.start < this.end) {
                     this.images.set(node.start - this.start, {
-                        src: node.destination ?? '', alt: this.source.slice(node.textStart, node.textEnd),
+                        src: node.destination ?? '', alt: plainText(node.children ?? [], this.source),
                         title: node.title ?? null, link,
                     });
                 }
