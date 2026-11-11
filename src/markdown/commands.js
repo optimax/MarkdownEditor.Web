@@ -93,6 +93,8 @@ export function copiedText(state, selection) {
 export function deleteSelection(state, selection) {
     const [a, b] = selectedRange(state, selection);
     if (a === b) return null;
+    const cell = state.paragraphAt(a);
+    if (cell?.kind === 'cell' && cell === state.paragraphAt(b)) return cellEdit(state, a, b, '');
     return result(state.replaced(a, b, ''), a);
 }
 
@@ -105,7 +107,7 @@ export function insertText(state, selection, text) {
     const paragraph = state.paragraphAt(a);
     if (paragraph?.kind === 'cell') {
         // (a table cell is one line, and a pipe in it is text: the cell's own pipes stay the cell's)
-        text = cellText(text.replace(/\n/g, ' '), backslashesBefore(state.source, a), state.source[b] === '|');
+        return cellEdit(state, a, b, cellText(text.replace(/\n/g, ' '), backslashesBefore(state.source, a)));
     }
     if (a === b && paragraph?.kind === 'blank' && /\S/.test(text) && paragraph.lastLine + 1 < state.lines.length) {
         // (text typed on an empty paragraph is a block of its own: the blank line after it is kept)
@@ -118,18 +120,42 @@ export function insertText(state, selection, text) {
 
 /**
  * Text put into a table cell, whose pipes are all text: each pipe of it escaped that is not escaped already -- after an
- * odd number of backslashes, `before` of them the source's in front of it -- ("a||b" is "a\|\|b"), and a backslash it
- * ends with doubled when the cell's own pipe follows (`pipeAfter`), which it would else escape.
+ * odd number of backslashes, `before` of them the source's in front of it -- ("a||b" is "a\|\|b").
  */
-function cellText(text, before = 0, pipeAfter = false) {
+function cellText(text, before = 0) {
     let out = '', backslashes = before;
     for (const ch of text) {
         if (ch === '|' && backslashes % 2 === 0) out += '\\';
         out += ch;
         backslashes = ch === '\\' ? backslashes + 1 : 0;
     }
-    if (text && pipeAfter && backslashes % 2 === 1) out += '\\';
     return out;
+}
+
+/**
+ * [from, to) of a table cell replaced by `text` (typed, pasted, or nothing: a delete), the cell's pipes kept what they
+ * were. Only the first pipe after the edit can be changed by it, past the backslashes that follow the edit: a pipe is
+ * escaped by an odd number of them. The cell's own pipe (not escaped) that the edit would escape gets a space before it,
+ * padding of the cell ("x\|" of "x\\|" Backspaced is "x\ |", which shows "x\"); a pipe of the cell's text (escaped) that
+ * it would leave bare gets back a backslash at the end of `text` (the caret before it). Null when that leaves the
+ * source as it was (the backslash of an escaped pipe taken out: a cell has no bare pipe in its text).
+ */
+function cellEdit(state, from, to, text) {
+    const source = state.source;
+    let run = 0; // (the backslashes the edit is followed by)
+    while (source[to + run] === '\\') run++;
+    let insert = text, pad = '';
+    if (source[to + run] === '|') {
+        const escaped = (run + backslashesBefore(source, to)) % 2 === 1;
+        const ending = text.length - text.replace(/\\+$/, '').length;
+        const before = ending === text.length ? ending + backslashesBefore(source, from) : ending;
+        const escapes = (run + before) % 2 === 1;
+        if (escapes && !escaped) pad = ' ';
+        else if (!escapes && escaped) insert += '\\';
+    }
+    const after = source.slice(0, from) + insert + source.slice(to, to + run) + pad + source.slice(to + run);
+    if (after === source) return null;
+    return result(after, from + text.length);
 }
 
 const backslashesBefore = (source, at) => {
@@ -367,8 +393,10 @@ export function backspace(state, selection, word = false) {
 }
 
 // [from, to) of a paragraph taken out; a paragraph on a line of its own left blank by it goes with the line ending
-// after it when a blank line and more follow, so that one empty paragraph is left, not two.
+// after it when a blank line and more follow, so that one empty paragraph is left, not two. A table cell's pipes stay
+// what they were (cellEdit).
 function takeOut(state, p, from, to) {
+    if (p.kind === 'cell') return cellEdit(state, from, to, '');
     let start = from, end = to;
     const line = p.firstLine;
     if (p.kind === 'paragraph' && p.firstLine === p.lastLine && !p.itemLine) {

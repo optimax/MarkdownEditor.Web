@@ -1083,8 +1083,11 @@ of each line.
 | Up, Down | to the cell above or below |
 
 - A `|` typed or pasted in a cell is written `\|`, so that it is text and not the edge of a
-  cell (each of `||` too). A `\` typed right before the cell's edge is written `\\`, so that
-  it shows as `\` and the edge stays.
+  cell (each of `||` too).
+- Nothing typed or taken out of a cell moves its edges. A `\` left or typed right before the
+  cell's edge gets a space after it (the cell's padding), so that it shows as `\` and does
+  not make the edge text; Backspace on the `\` of a `\|` in a cell does nothing, since a cell
+  cannot hold a bare `|`.
 - A cell is one line: a line break typed or pasted into it becomes a space.
 - Spaces typed at the end of a cell show while the caret is after them.
 

@@ -124,10 +124,31 @@ test('pipes typed or pasted into a table cell are text, and the cell\'s own pipe
     check(typed('a\\|b'), '| ¦ |\n| --- |', '| a\\|b¦ |\n| --- |'); // (escaped already)
     check(typed('a\\\\|b'), '| ¦ |\n| --- |', '| a\\\\\\|b¦ |\n| --- |'); // (a backslash, then a pipe)
     check(typed('|'), '| x\\¦ |\n| --- |', '| x\\|¦ |\n| --- |'); // (the source's backslash escapes it)
-    check(typed('\\'), '|x¦|y|\n|-|-|', '|x\\\\¦|y|\n|-|-|'); // (the cell's pipe after it kept)
+    check(typed('\\'), '|x¦|y|\n|-|-|', '|x\\¦ |y|\n|-|-|'); // (a space keeps the cell's pipe after it)
+    check(typed('x'), '| a\\¦|b |\n| - |', '| a\\x¦\\|b |\n| - |'); // (between an escaped pipe and its backslash)
+    check(typed('y'), '| a\\x¦\\|b |\n| - |', '| a\\xy¦\\|b |\n| - |');
     const { source, selection } = parse('| x¦ | y |\n| --- | --- |');
     const pasted = new MarkdownState(commands.insertText(new MarkdownState(source), selection, 'a||b|').source);
     equal(pasted.doc.leaves[0].rows[0].cells.length, 2, 'the row\'s cells');
+});
+
+test('a table cell\'s pipes stay what they were when text is taken out of it', () => {
+    const cells = (marked) => new MarkdownState(parse(marked).source).doc.leaves[0].rows?.[0].cells.length ?? 0;
+    const checkCells = (fn, before, after, count) => {
+        check(fn, before, after);
+        if (after) equal(cells(after), count, `${JSON.stringify(after)}: the row's cells`);
+    };
+    // (the cell shows "x\": the backslash left would escape the cell's own pipe, so a space goes before it)
+    checkCells(commands.backspace, '|x\\\\¦|y|\n|-|-|', '|x\\¦ |y|\n|-|-|', 2);
+    checkCells(commands.deleteForward, '|x\\¦\\|y|\n|-|-|', '|x\\¦ |y|\n|-|-|', 2);
+    checkCells(commands.backspace, '|x«\\»\\|y|\n|-|-|', '|x¦\\ |y|\n|-|-|', 2);
+    checkCells(commands.backspace, '|x\\\\\\\\¦|y|\n|-|-|', '|x\\\\\\¦ |y|\n|-|-|', 2);
+    // (the backslash of an escaped pipe of the text: a cell has no bare pipe in its text, so nothing is done)
+    check(commands.backspace, '| a\\¦|b | c |\n| - | - |', null);
+    check(commands.deleteForward, '| a¦\\|b | c |\n| - | - |', null);
+    // (what is taken out changes no pipe: as anywhere; an escaped character's backslash stays, as in a paragraph)
+    checkCells(commands.backspace, '| ab¦ | c |\n| - | - |', '| a¦ | c |\n| - | - |', 2);
+    checkCells(commands.backspace, '| a\\|¦b | c |\n| - | - |', '| a\\¦b | c |\n| - | - |', 2);
 });
 
 test('a picture: its description\'s brackets and backslashes escaped, its address written as a link\'s', () => {
