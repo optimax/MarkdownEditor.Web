@@ -1165,7 +1165,11 @@ A test page that the browser has not given the system's focus is told of no focu
 the tests that need it send the focus events themselves.
 
 `tools/serve.ps1` serves the folder at `http://localhost:8765/` with nothing but Windows
-PowerShell (ES modules are not loaded from `file://` pages).
+PowerShell (ES modules are not loaded from `file://` pages), to this machine only, and only
+files inside the folder: a path is served if it begins with the folder's and a separator
+(so not from a sibling folder whose name begins with this one's, `MarkdownEditor.Web2`).
+Windows' HTTP layer, under `HttpListener`, already refuses a request that climbs above the
+server's root (`/src/..%5C..%5C...`: 403) before the script sees it.
 
 ------
 

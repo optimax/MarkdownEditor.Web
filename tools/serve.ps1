@@ -7,7 +7,10 @@
 
 param([int]$Port = 8765)
 
-$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path.TrimEnd('\')
+# (a path is served only inside the folder: the folder's name and a separator, so that a sibling whose name begins with
+# it -- MarkdownEditor.Web2 -- is not, which "..%5C" in a request could reach)
+$inside = $root + [IO.Path]::DirectorySeparatorChar
 $types = @{
     '.html' = 'text/html; charset=utf-8'; '.js' = 'text/javascript; charset=utf-8'; '.mjs' = 'text/javascript; charset=utf-8'
     '.css' = 'text/css; charset=utf-8'; '.json' = 'application/json; charset=utf-8'; '.md' = 'text/markdown; charset=utf-8'
@@ -29,7 +32,7 @@ try {
             if ($relative -eq '') { $relative = 'demo/index.html' }
             $path = [IO.Path]::GetFullPath((Join-Path $root $relative))
             if (Test-Path $path -PathType Container) { $path = Join-Path $path 'index.html' }
-            if (-not $path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path $path -PathType Leaf)) {
+            if (-not $path.StartsWith($inside, [StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path $path -PathType Leaf)) {
                 $response.StatusCode = 404
                 $bytes = [Text.Encoding]::UTF8.GetBytes("Not found: $relative")
             } else {
