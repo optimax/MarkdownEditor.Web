@@ -86,7 +86,7 @@ escaped, the address written as a link's: `writtenDestination`). `test/element.t
 new. See the document's sections 7.2, 7.4, 12 and 13.
 
 The review's other findings, as `TO-DO.md` tasks (2026-11-11, the user: "Process the
-TO-DO"), each on its own `claude/` branch merged into main, not pushed:
+TO-DO"), each on its own `claude/` branch merged into main:
 - A file dropped on the editor is refused, not opened in place of the page (`refuseDrops`;
   section 4.7).
 - A table cell's pipes stay what they were whatever is typed or taken out (`cellEdit`: a
@@ -95,8 +95,11 @@ TO-DO"), each on its own `claude/` branch merged into main, not pushed:
 - Right-click: the browser's menu is the text area's, for Cut, Copy and Paste
   (`_onContextMenu`; section 4.7). Checked by a test, not seen in a real menu.
 - The toolbar from the keyboard: one Tab stop, the arrows, Home, End, Escape, Alt+F10;
-  Escape then Tab leaves the text; hidden syntax `aria-hidden` (sections 4.7 and 11). What a
-  screen reader reads at the caret is a question in `TO-DO.md`.
+  Escape then Tab leaves the text; hidden syntax `aria-hidden` (sections 4.7 and 11).
+- Screen reader mode (the user's answer: "As proposed, with the default `auto`"): the text
+  area holds the text round the caret as shown, its caret and selection the view's
+  (`_mirror`); the editor's `screenReader`, `'auto'` on with a fine pointer and off on a touch
+  screen, Shift+Alt+F1 to switch it (sections 4.7 and 11). Not tried with a screen reader.
 - A Mac's Cmd with the arrows, Backspace and Delete (the view's `mac`; section 4.8). Not
   tried on a Mac.
 - Clipboard failures raise `clipboardunavailable`, which the editor passes on, and a refused
@@ -108,8 +111,10 @@ TO-DO"), each on its own `claude/` branch merged into main, not pushed:
 - `isDark` tells any CSS color (section 11); a picture's alt is its description's plain
   text (section 6.1); tests for the clipboard's events and the element's attributes;
   `serve.ps1` serves only inside its folder (section 13).
-- Two tasks wait on the user's answer (`[QUESTION]` in `TO-DO.md`): screen readers at the
-  caret, and adapting `AGENTS.md`, `.gitignore` and `TO-DO-INSTRUCTIONS.md`.
+- `AGENTS.md`, `.gitignore` and `TO-DO-INSTRUCTIONS.md` are this project's own now (the
+  user: "Yes, and `.claude/` in it"): the web's environment, tests and verification, the
+  documentation kept in step; `.claude/` ignored; the TO-DO's build-and-publish step is
+  "run the tests".
 
 ## Design decisions
 
@@ -130,7 +135,7 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Verification
 
-- `test/index.html`: 87 passed, 0 failed (Chrome, in the Claude desktop app's browser,
+- `test/index.html`: 89 passed, 0 failed (Chrome, in the Claude desktop app's browser,
   2026-11-11). `?steps=150` ran the random test clean as well.
 - The browser pane was out of sight for the work of 2026-11-11: the browser's own context
   menu was not seen, and the timings there (the emphasis's) are of a background page.
@@ -151,9 +156,7 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Next steps
 
-1. The two `[QUESTION]` tasks in `TO-DO.md`, once the user has answered: screen readers at
-   the caret; `AGENTS.md`, `.gitignore` and `TO-DO-INSTRUCTIONS.md` made this project's.
-2. Firefox and Safari, mobile keyboards and input methods, a right-click's menu and a Mac's
-   keys, tried by hand.
-3. Table commands, code highlighting, find and replace; the raw view's own stylesheet
+1. Firefox and Safari, mobile keyboards and input methods, a right-click's menu, a Mac's keys
+   and a screen reader (NVDA, VoiceOver), tried by hand.
+2. Table commands, code highlighting, find and replace; the raw view's own stylesheet
    (MaxPad's).
