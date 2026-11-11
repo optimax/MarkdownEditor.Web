@@ -2139,7 +2139,11 @@ milliseconds. Nothing needs to be done for it.
 - **Tables:** no commands to add or delete columns, delete rows or set alignment; use the
   raw Markdown view.
 - **Code is not colored** by its language.
-- **Pictures** cannot be pasted or dropped in; text cannot be dragged and dropped.
+- **Pictures** cannot be pasted or dropped in; text cannot be dragged and dropped. A file
+  dropped on the editor is refused, so that the browser does not open it in place of the
+  page. A page that takes drops on the editor itself (to upload a picture, say) listens for
+  `dragover` on an element round it, sets `event.dataTransfer.dropEffect` to `'copy'` there,
+  and is then given the `drop`.
 - **Pasting** takes the clipboard's plain text: formats copied from a web page or a word
   processor are not turned into Markdown.
 - **No find and replace**, spelling, or export yet.

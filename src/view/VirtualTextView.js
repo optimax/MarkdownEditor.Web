@@ -2017,6 +2017,7 @@ export class VirtualTextView extends EventTarget {
                     this.focus();
                 }
             }),
+            ...refuseDrops().map(([type, handler]) => on(this.host, type, handler)),
         ];
         this._unwire = () => offs.forEach((off) => off());
     }
@@ -2129,8 +2130,10 @@ export class VirtualTextView extends EventTarget {
         } else if (type === 'historyUndo' || type === 'historyRedo') {
             e.preventDefault();
             this.dispatchEvent(new Event(type === 'historyUndo' ? 'undo' : 'redo'));
-        } else if (type === 'insertFromPaste' || type === 'insertFromDrop' || type === 'deleteByCut') {
+        } else if (type === 'insertFromPaste' || type === 'deleteByCut') {
             // (handled by the clipboard events)
+        } else if (type === 'insertFromDrop') {
+            e.preventDefault(); // (nothing is dropped into the text yet: `refuseDrops`)
         } else {
             e.preventDefault();
         }
@@ -2621,6 +2624,22 @@ export class VirtualTextView extends EventTarget {
         this._changed();
         this._afterHostChange(false);
     }
+}
+
+/**
+ * The listeners ([type, handler]) that keep a drop on `element` from doing what the browser would do with it -- open a
+ * dropped file in place of the page, and the work in it lost -- as long as the view takes no drops itself: a drag over
+ * it is shown as one that cannot be dropped. A page that takes drops on it sets `dataTransfer.dropEffect` in its own
+ * `dragover` listener (on the element, added after the view, or on an element round it), and is then given the drop.
+ */
+export function refuseDrops() {
+    return [
+        ['dragover', (event) => {
+            event.preventDefault();
+            if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+        }],
+        ['drop', (event) => event.preventDefault()],
+    ];
 }
 
 function el(tag, className) {

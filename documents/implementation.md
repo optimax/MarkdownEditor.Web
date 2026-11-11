@@ -299,6 +299,12 @@ The browser lays the text out; the view reads the geometry back with DOM ranges.
   triple click a paragraph, and dragging extends (by whole words or paragraphs after a double
   or triple click), scrolling when the pointer leaves the view. Ctrl+click on a link raises
   `hyperlinkclick`; any other click first raises a cancelable `runclick`.
+- **Drops** are refused (`refuseDrops`, on the view's host, and on the editor's frame for its
+  toolbar): `dragover` is cancelled with the drop effect `none`, and `drop` and the text
+  area's `insertFromDrop` are cancelled, so that a file dropped on the editor is not opened in
+  place of the page. A page that takes drops itself sets `dataTransfer.dropEffect` in a
+  `dragover` listener of its own (on an element round the editor: it runs after the
+  editor's) and is given the `drop`.
 
 ### 4.8 Caret moves
 
@@ -1096,7 +1102,7 @@ the suites; `?steps=150` makes the random test longer.
 | `projection.test.js` | blank lines, hidden and shown syntax (`⟦hidden⟧`, `⟨concealed⟩`), styles, list markers, and that every paragraph is its stretch of the source and every position maps to the source and back |
 | `commands.test.js` | each editing rule (Tab on bullets and numbered items among them; pipes and backslashes typed or pasted into a table cell), the formats, the paragraph types, the links (made, their address changed, taken away) and the pictures (their description and address escaped), written with `¦` for the caret and `«...»` for a selection, as MaxPad.Editing.Tests write theirs |
 | `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits, the gutter's numbers (a table's row one, its room taken and given back) and names (outside the numbers, on their line, the host's first, a long one cut); the outline (a heading folding what it heads, the caret stepping over it, a heading replaced by its like staying collapsed, a caret put in a fold opening it) |
-| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); a Markdown heading edited and undone staying collapsed; the page's own toolbar buttons; no syntax in a read-only editor, and no undo or redo in it; Ctrl+K in a link; Tab on a numbered item |
+| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); a Markdown heading edited and undone staying collapsed; the page's own toolbar buttons; no syntax in a read-only editor, and no undo or redo in it; Ctrl+K in a link; Tab on a numbered item; a file dropped on the text or the toolbar refused, a page's own listener after the editor's |
 | `raw.test.js` | the raw view's paragraphs and its map to the source (every offset there and back); looking that changes nothing; text changed in it as one undo step; no formats in it; the paragraph numbers and types of the two views agreeing, a line's type following its text |
 | `element.test.js` | `<markdown-editor>`: the Markdown in a `<template>` read as written (a quote's `>`, an `&`, its HTML); a form's reset bringing back the Markdown each element was given, and the form sending it |
 

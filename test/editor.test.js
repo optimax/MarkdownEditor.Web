@@ -402,6 +402,35 @@ test('a read-only editor undoes and redoes nothing', async () => {
     editor.readOnly = false;
 });
 
+test('a file dropped on the editor is not opened in place of the page; a page may take it', () => {
+    const stage = document.getElementById('stage');
+    stage.replaceChildren();
+    const editor = new MarkdownEditor(stage, { markdown: 'abc' });
+    const drag = (target, type) => {
+        const data = new DataTransfer();
+        data.items.add(new File(['x'], 'x.png', { type: 'image/png' }));
+        data.dropEffect = 'copy';
+        const event = new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: data });
+        target.dispatchEvent(event);
+        return [event.defaultPrevented, data.dropEffect];
+    };
+    const text = editor.view.content, bar = editor.toolbar;
+    equal(drag(text, 'dragover'), [true, 'none'], 'over the text');
+    equal(drag(text, 'drop')[0], true, 'dropped on the text');
+    equal(drag(bar, 'dragover'), [true, 'none'], 'over the toolbar');
+    equal(drag(bar, 'drop')[0], true, 'dropped on the toolbar');
+    // (a page that takes drops on the editor sets the drop effect in its own listener, which runs after the editor's;
+    // a script's DataTransfer takes no effect but 'none', so what is checked here is that it runs after)
+    let seen = null;
+    const take = (event) => (seen = event.dataTransfer.dropEffect);
+    stage.addEventListener('dragover', take);
+    drag(text, 'dragover');
+    stage.removeEventListener('dragover', take);
+    equal(seen, 'none', 'the page\'s own listener, after the editor\'s');
+    equal(editor.value, 'abc');
+    editor.destroy();
+});
+
 // Random commands on documents of every kind: the view stays what the source says, and everything undoes to the
 // document it began as and redoes to the one it ended as.
 const DOCUMENTS = [

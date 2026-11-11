@@ -6,7 +6,7 @@
 //   const editor = new MarkdownEditor(document.querySelector('#editor'), { markdown: '# Hello', theme: 'dark' });
 //   editor.addEventListener('change', () => save(editor.value));
 
-import { VirtualTextView, GutterContent } from './view/VirtualTextView.js';
+import { VirtualTextView, GutterContent, refuseDrops } from './view/VirtualTextView.js';
 import { MarkdownController } from './markdown/controller.js';
 import { MarkdownStyleProvider, RawStyleProvider } from './markdown/styleProvider.js';
 import { RawMode, rawToSource, rawFromSource } from './markdown/rawView.js';
@@ -131,6 +131,8 @@ export class MarkdownEditor extends EventTarget {
         this.body = document.createElement('div');
         this.body.className = 'mde-body';
         this.root.append(this.body);
+        // (a file dropped on the toolbar is not opened in place of the page either: the view refuses drops on itself)
+        for (const [type, handler] of refuseDrops()) this.root.addEventListener(type, handler);
         host.append(this.root);
 
         this.styles = new MarkdownStyleProvider(this.options.theme ?? 'light');
