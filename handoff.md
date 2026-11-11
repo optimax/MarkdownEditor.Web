@@ -76,8 +76,8 @@ at one offset were applied in the wrong order); Ctrl+K in a link nested a new li
 read-only editor. See the document's sections 7.4 and 11.
 
 A review of the project (2026-11-11, the user: "Fix the four confirmed bugs on a claude/
-branch here AND add all your other findings as tasks in TO-DO.md"), on the branch
-`claude/review-fixes`: a `<template>` in `<markdown-editor>` was read by its `innerHTML`, a
+branch here AND add all your other findings as tasks in TO-DO.md"), fixed on main (commit
+`4c41574`): a `<template>` in `<markdown-editor>` was read by its `innerHTML`, a
 quote's `>` coming back as `&gt;` (now `templateText`, node by node); a form's reset emptied
 the element (now the Markdown it was given); `a||b` pasted into a table cell left the second
 pipe bare, a cell more in its row (now `cellText`: every pipe not escaped already, and a

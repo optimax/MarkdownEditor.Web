@@ -63,7 +63,7 @@ Ctrl+Scroll Wheel changes the zoom like in MaxPad (nice!) but there are no corre
 When the document is narrower than the editor, it currently is centered (via `margin: 0 auto` on the `vtv-page`  element). Presumably, when styling inside the editor (above) is accomplished, it will be possible to change the margin of the page via the stylesheet.
 
 <!-- The tasks below are the findings of the review of 2026-11-11 that were not fixed with it
-(the four bugs it fixed are on the branch claude/review-fixes). Highest priority first. -->
+(the four bugs it fixed are on main, commit 4c41574). Highest priority first. -->
 
 ## Dropping a File Leaves the Page
 
