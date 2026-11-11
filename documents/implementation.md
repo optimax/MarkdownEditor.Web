@@ -538,7 +538,13 @@ would split there unless the pipe is escaped (a code span is kept whole).
 `parseInlines(text, definitions)` is CommonMark's algorithm: a linked list of nodes, a stack
 of delimiter runs for emphasis (the rule of three for `*` and `_`), a stack of brackets for
 links and images. The extras: `~~` makes strikethrough and one `~` subscript, `^`
-superscript, `==` underline (one `=` is text). Every node is `[start, end)` of the text, its
+superscript, `==` underline (one `=` is text). As commonmark.js, it keeps an openers' bottom
+for each kind of closer (`bottomKind`: `*` and `_` by whether the closer can open and its
+length modulo 3, `~` and `^` by their character, `==` while it has two left): where a closer
+found no opener, the next of its kind does not search below that again, so that a paragraph
+of openers and closers that never meet parses in a time that grows with its length, not its
+square (`**a* _b__ ~c~~ ` 32,000 times, 480 KB: 70 ms, where it took 4.4 s; the same trees,
+20,000 random strings of delimiters compared). Every node is `[start, end)` of the text, its
 syntax included:
 
 | Node | Its parts |
@@ -1133,7 +1139,7 @@ the suites; `?steps=150` makes the random test longer.
 
 | Suite | What it checks |
 | --- | --- |
-| `parser.test.js` | the block structure, lists, quotes, code, HTML, tables, front matter, definitions, line marks, inlines and their offsets |
+| `parser.test.js` | the block structure, lists, quotes, code, HTML, tables, front matter, definitions, line marks, inlines and their offsets; emphasis whose openers and closers do not meet, and a 480 KB paragraph of them parsed in under 2 s (a time that grows with its square took 4.4 s) |
 | `incremental.test.js` | a source read again in part, after thousands of random changes (characters that make and unmake every kind of block, typed and taken away) in documents of every kind, is what a whole reading makes of it: every line, mark, block, definition and paragraph, field by field; a change reads only the blocks around it; a definition makes it read whole |
 | `projection.test.js` | blank lines, hidden and shown syntax (`⟦hidden⟧`, `⟨concealed⟩`), styles, list markers, and that every paragraph is its stretch of the source and every position maps to the source and back |
 | `commands.test.js` | each editing rule (Tab on bullets and numbered items among them; pipes and backslashes typed, pasted or taken out of a table cell, the row keeping its cells), the formats, the paragraph types, the links (made, their address changed, taken away) and the pictures (their description and address escaped), written with `¦` for the caret and `«...»` for a selection, as MaxPad.Editing.Tests write theirs |

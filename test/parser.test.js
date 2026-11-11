@@ -111,6 +111,20 @@ test('emphasis', () => {
     equal(inlines('a = b'), 'text:a = b');
 });
 
+test('emphasis: openers that no closer meets are not searched again (a paragraph of them parses in a time linear)', () => {
+    // (a closer that found no opener sets the bottom of the search for its kind; the rule of three keeps kinds apart)
+    equal(inlines('*a_ *b_ c*'), 'text:*a_  | em:*b_ c*[text:b_ c]');
+    equal(inlines('**a* b*'), 'em:**a* b*[em:*a*[text:a] | text: b]');
+    equal(inlines('*a** b*'), 'em:*a*[text:a] | text:* b*');
+    equal(inlines('_a* _b_'), 'text:_a*  | em:_b_[text:b]');
+    equal(inlines('==a= ==b=='), 'text:==a=  | underline:==b==[text:b]');
+    const text = '**a* _b__ ~c~~ '.repeat(32000); // (480 KB in one paragraph: 4.4 s when each closer searched them all)
+    const start = performance.now();
+    parseInlines(text);
+    const time = performance.now() - start;
+    ok(time < 2000, `${Math.round(time)} ms`);
+});
+
 test('code, escapes, breaks', () => {
     equal(inlines('`a*b*` \\*'), 'code:`a*b*` | text:  | escape:\\*');
     equal(inlines('``a`b``'), 'code:``a`b``');

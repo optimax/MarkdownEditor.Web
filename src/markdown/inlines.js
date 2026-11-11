@@ -317,13 +317,19 @@ class InlineParser {
     processEmphasis(stackBottom) {
         let closer = this.delimiters;
         while (closer && closer.previous !== stackBottom) closer = closer.previous;
+        // (commonmark.js's openers bottom: for each kind of closer, the delimiter below which no opener was found for
+        // one of that kind, so that no search is made twice -- else a paragraph of openers and closers that never meet
+        // is searched in a time that grows with its square)
+        const bottoms = new Map();
         while (closer) {
             if (!closer.canClose) {
                 closer = closer.next;
                 continue;
             }
+            const kind = bottomKind(closer);
+            const bottom = kind !== null && bottoms.has(kind) ? bottoms.get(kind) : stackBottom;
             let opener = closer.previous, found = false;
-            while (opener && opener !== stackBottom) {
+            while (opener && opener !== stackBottom && opener !== bottom) {
                 if (opener.ch === closer.ch && opener.canOpen && matches(opener, closer)) {
                     found = true;
                     break;
@@ -362,6 +368,7 @@ class InlineParser {
                     closer = next;
                 }
             } else {
+                if (kind !== null) bottoms.set(kind, oldCloser.previous);
                 closer = closer.next;
                 if (!oldCloser.canOpen) this.removeDelimiter(oldCloser);
             }
@@ -468,6 +475,22 @@ function matches(opener, closer) {
     }
     if (closer.ch === '=') return opener.count >= 2 && closer.count >= 2;
     return true;
+}
+
+// The kind of a closer for the openers' bottom: closers of one kind are matched by the same openers, so that where none
+// was found for one, none is for another. * and _ by the rule of three (whether the closer can open, and its length
+// modulo 3); ~ and ^ by their character; == only while it has two left to use (an opener with fewer than two never has
+// more again), null else: no bottom.
+function bottomKind(closer) {
+    switch (closer.ch) {
+        case '*':
+        case '_':
+            return closer.ch + (closer.canOpen ? 3 : 0) + (closer.original % 3);
+        case '=':
+            return closer.count >= 2 ? '=' : null;
+        default:
+            return closer.ch;
+    }
 }
 
 function usedOf(opener, closer) {
