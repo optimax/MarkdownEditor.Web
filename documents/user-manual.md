@@ -2385,7 +2385,7 @@ and the custom property each one sets. Sizes are in px at 100%, and zoom with th
 | `fontSize` | `16` | `--mde-font-size` | the text's size, which every other size follows |
 | `codeFontFamily` | `Consolas, "Cascadia Mono", ...` | `--mde-code-font-family` | the font of code |
 | `color` | `#1f2328` | `--mde-color` | the text |
-| `background` | `#ffffff` | `--mde-background` | the background |
+| `background` | `#ffffff` | `--mde-background` | the background (a dark one, however written, makes the frame and the toolbar dark too) |
 | `headingColor` | `#203287` | `--mde-heading-color` | headings, and the lines under them |
 | `linkColor` | `#0066cc` | `--mde-link-color` | links, and checked boxes |
 | `syntaxColor` | `#808080` | `--mde-syntax-color` | the syntax shown at the caret |

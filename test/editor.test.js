@@ -474,6 +474,26 @@ test('the toolbar is one Tab stop, its arrows going from control to control; Alt
     editor.destroy();
 });
 
+test('the frame and the toolbar are dark on a dark background however its color is written', () => {
+    const stage = document.getElementById('stage');
+    stage.replaceChildren();
+    stage.style.setProperty('--page-dark', '#202124');
+    const editor = new MarkdownEditor(stage, { markdown: 'abc' });
+    const dark = (background) => {
+        editor.theme = { background };
+        return editor.root.style.getPropertyValue('--mde-bar') === '#25272b';
+    };
+    const colors = ['#111', '#1e1f22', 'black', 'rgb(20, 20, 30)', 'hsl(220 10% 12%)', 'oklch(0.2 0 0)',
+        'var(--page-dark)', '#fff', 'white', 'rgb(250 250 250)', 'transparent', 'not a color'];
+    equal(colors.map(dark), [true, true, true, true, true, true, true, false, false, false, false, false]);
+    editor.theme = 'dark';
+    equal(editor.root.style.getPropertyValue('--mde-bar'), '#25272b', 'the dark theme');
+    stage.style.removeProperty('--page-dark');
+    editor.destroy();
+    const away = new MarkdownEditor(document.createElement('div'), { theme: 'dark' });
+    equal(away.root.style.getPropertyValue('--mde-bar'), '#25272b', 'made out of the page');
+});
+
 test('a file dropped on the editor is not opened in place of the page; a page may take it', () => {
     const stage = document.getElementById('stage');
     stage.replaceChildren();

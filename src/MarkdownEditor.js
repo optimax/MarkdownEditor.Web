@@ -818,7 +818,7 @@ export class MarkdownEditor extends EventTarget {
 
     _applyThemeColors() {
         const t = this.styles.theme;
-        const dark = isDark(t.background);
+        const dark = isDark(t.background, this.root);
         const set = (name, value) => this.root.style.setProperty(name, value);
         set('--mde-bg', t.background);
         set('--mde-ink', t.color);
@@ -840,9 +840,26 @@ export class MarkdownEditor extends EventTarget {
     }
 }
 
-function isDark(color) {
-    const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(color ?? '');
-    if (!match) return false;
-    const [r, g, b] = match.slice(1).map((hex) => parseInt(hex, 16));
-    return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+// Whether a CSS color is dark (what the frame and the toolbar are drawn in: the theme's background), however it is
+// written -- "#111", "rgb(...)", "hsl(...)", "oklch(...)", a name, a custom property of the page's -- as the browser
+// computes it on `element` (on the page's root while the element is not in the page) and draws it (one pixel of a
+// canvas). A color it cannot tell, or a transparent one, is light.
+let pixel = null;
+function isDark(color, element) {
+    if (!color || typeof document === 'undefined') return false;
+    const probe = document.createElement('span');
+    probe.style.color = color;
+    if (!probe.style.color) return false; // (not a color)
+    probe.style.display = 'none';
+    (element?.isConnected ? element : document.documentElement).append(probe);
+    const computed = getComputedStyle(probe).color;
+    probe.remove();
+    pixel ??= Object.assign(document.createElement('canvas'), { width: 1, height: 1 })
+        .getContext('2d', { willReadFrequently: true });
+    if (!pixel) return false;
+    pixel.clearRect(0, 0, 1, 1);
+    pixel.fillStyle = computed;
+    pixel.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = pixel.getImageData(0, 0, 1, 1).data;
+    return a > 0 && 0.299 * r + 0.587 * g + 0.114 * b < 128;
 }
