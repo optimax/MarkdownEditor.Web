@@ -26,7 +26,9 @@ TO-DO list is a live document. Be careful to verify that `TO-DO.md` hasn't chang
 
 Monitor for TO-DO changes as you are working through a task. When you detect changes, re-read the TO-DO **from the beginning**, as some tasks previously marked as [DONE] may have been rejected, instructions may have changed, etc., and the highest priority tasks are always at the top.
 
-After completing each task, build the solution in Release mode to make the executables available for local copying, then run `publish-locally.bat` to publish.
+Before committing each task, run the tests (`tools/serve.ps1`, then `test/index.html`; with
+`?steps=150` too for a change to the parser, the projection, the commands or the controller):
+every test passes. There is nothing to build or publish (`AGENTS.md`, sections 6 and 11).
 
 Proceed until the end, or until you encounter the line `# END-OF-TO-DO`, or `# STOP` whichever comes first. Do NOT work on TO-DO items beyond one of these markers.
 

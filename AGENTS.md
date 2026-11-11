@@ -1,422 +1,319 @@
-# MarkdownTools — Agent Instructions
+# MarkdownEditor.Web — Agent Instructions
 
 ## Purpose
 
-This file defines the durable architectural assumptions, development conventions, Markdown semantics, user requirements, and agent working rules for the **MarkdownTools** solution.
+This file holds the durable architectural assumptions, development conventions, Markdown
+semantics, user requirements and agent working rules of **MarkdownEditor.Web**. Every coding
+agent working on this repository reads it completely before changing the project.
 
-It stays generic: it holds what applies to every project in the solution. Requirements that belong to one product, such as how MaxPad edits Markdown, live in the `AGENTS.md` of that product's project (for example `MaxPad\AGENTS.md`).
+Then read `handoff.md`: it describes the current state of the implementation and the next
+steps. How the editor works is in `documents/implementation.md`; what it does, for writers and
+for the pages that embed it, is in `documents/user-manual.md`.
 
-Every coding agent working on this repository should read this file completely before modifying the project.
+This file holds rules and decisions that stay stable across sessions. The current source tree
+is authoritative where documentation and source disagree.
 
-If a `HANDOFF.md` file exists, read it after this file. It is the shared handoff: it says how
-the handoff files are organized and holds what every agent needs to know. Then read the
-`handoff.md` in the folder of the application you are working on (`MaxWrite\handoff.md` or
-`MaxPad\handoff.md`): it describes that application's current implementation state and
-immediate next steps, so that agents working on the two applications at the same time do not
-overwrite each other's instructions. This file contains rules and design decisions that
-should remain stable across development sessions.
-
-If a project directory contains a more specific `AGENTS.md`, read that file as well.
-
-The current source tree is authoritative if documentation and source disagree.
+(It began as a copy of MarkdownTools' `AGENTS.md`, and was made this project's own on
+2026-11-11, the user approving the proposal in `TO-DO.md`.)
 
 ------
 
 # 1. Project Overview
 
-MarkdownTools is a suite of Windows desktop tools for working with documents.
+MarkdownEditor.Web is a WYSIWYG Markdown editor for web pages, as a plain JavaScript component:
+`new MarkdownEditor(element, options)`, or the `<markdown-editor>` element, which is a form
+field. You edit formatted text; the document stays Markdown.
 
-The primary application is currently:
-
-- **MaxPad** — a lightweight WYSIWYG Markdown editor. What it is, and its product-specific rules, are in `MaxPad\AGENTS.md`.
-
-The suite also includes:
-
-- **MaxWrite** — a lightweight but capable WYSIWYG document word processor.
-
-MaxWrite is intended to provide a word-processor editing experience for general purpose documents, supporting a multitude of input and output document formats.
+It is the web counterpart of **MaxPad**, the WPF Markdown editor in MarkdownTools (beside this
+repository, `C:\PROJECTS\MarkdownTools`): the same layers, the same rules of what each key
+does, and a browser version of the `VirtualTextView` control it is built on. Where MaxPad has
+settled a question (an editing rule, a key, a look), follow MaxPad unless a browser makes that
+impossible, and say where it differs.
 
 ------
 
 # 2. Development Environment
 
-Primary environment:
+- Plain JavaScript ES modules: no framework, no build step, no dependencies, no transpiler.
+  The files in `src/` are what a page imports.
+- Browsers: tried in Chrome (the Claude desktop app's browser pane). Firefox, Safari, phones
+  and input methods are not tried yet: say so rather than assume.
+- Windows 11 is the development machine. `tools/serve.ps1` serves the folder at
+  `http://localhost:8765/` with nothing but Windows PowerShell (ES modules are not loaded from
+  `file://` pages); `.claude/launch.json` starts it for Claude's browser.
 
-- Windows 11
-- Visual Studio 2026
-- C#
-- WPF
-- .NET 10
-- Target framework: `net10.0-windows`
-- Markdig for Markdown parsing
-- xUnit v3 for automated tests
-- `Microsoft.Testing.Platform` for test execution
-- Our shared libraries `MaxServices.Core` (whose `MaxServices.Core.Shell` is the application shell), `MaxServices.Panes`, `OptimaxTools.Keyboard`, `OptimaxTools.Options` and `OptimaxTools.FontSelection` are NuGet packages made in the Optimax.Shared.Lib repository (beside this one) and kept in `LocalPackages`: change them there, by its rules, not here (`handoff.md`, "Start here", item 6)
-
-Use the solution format already present in the repository.
-
-Do not migrate the application to WinUI, Avalonia, MAUI, Electron, WebView, or another UI technology unless explicitly requested.
-
-Do not suggest Electron as the underlying technology.
-
-Do not introduce an HTML/WebView-based Markdown renderer as a replacement for the WPF renderer.
+Do not introduce a framework, a bundler, TypeScript, npm packages or any other dependency
+unless the user asks for it.
 
 ------
 
 # 3. Core Product Principle
 
-There is no restriction on the transformations required to convert a document file into its WPF presentation (and vice versa).
+**The Markdown source is the authority.** The parse tree (`markdown/parser.js`) is read from
+it, the view shows a projection of it (`markdown/projection.js`), and every edit is a change
+of the source worked out by a pure function of the source and the selection
+(`markdown/commands.js`, `formatting.js`, `blocks.js`), after which the source is read again
+and the view given the paragraphs that changed. The view's own editing never runs for
+Markdown.
 
-It is acceptable and, in fact, encouraged to introduce the internal representation of a document as a Document Object Model (DOM) custom-tailored to the needs of the presentation.
+An "open then save" of an *unedited* document is byte-identical, line endings included.
 
-**The DOM is the authoritative source of the document.**
-
-Editing the document in memory means manipulating the DOM. Presenting the DOM in a GUI and saving it in the form of a file are two examples of its presentation. There may be other ways of representing the DOM that will be introduced in the future.
-
-An "open then save" of an *unedited* file should remain byte-identical.
-
-Edited blocks re-emitted into a file in a canonical style should keep the author's own stylistic choices, but may change other aspects of the file to conform to the canonical representation.
-
-The DOM in MaxPad and the DOM in MaxWrite do not need to agree. Each is serving a different purpose and is specific to that application.
+Edited blocks written again keep the author's own stylistic choices (their markers, their
+fences, their emphasis characters) wherever the edit does not have to change them.
 
 ------
 
 # 4. Markdown Standard
 
-**CommonMark is the authoritative source of Markdown behavior, and Markdig's interpretation of CommonMark is its canonical definition.** This holds wherever any tool in this solution reads or writes Markdown.
+**CommonMark is the authoritative source of Markdown behavior, and Markdig's interpretation
+of CommonMark is its reference**, as it is for MaxPad. The extensions are MaxPad's: pipe
+tables, task lists, YAML front matter, `==underline==`, `~~strikethrough~~`, `~subscript~`
+and `^superscript^`.
 
-When Markdown interpretation is ambiguous, check the CommonMark specification and Markdig behavior before inventing application-specific semantics.
-
-The goal is to behave like standard Markdown wherever practical.
+When Markdown interpretation is ambiguous, check the CommonMark specification, commonmark.js
+(which the parser follows) and Markdig before inventing semantics of the editor's own.
 
 ------
 
 # 5. Line Ending Handling
 
-Internally, Markdown editing should not depend on Windows CRLF semantics. The tools that accept markdown should equally work with Windows (CRLF), Linux/Unix convention (LF only), or Mac convention (CR only).
+The editor works with CRLF, LF and CR documents alike: it reads them with "\n" and gives the
+document back in its own line endings. Be especially careful when translating between:
 
-Be especially careful when translating between:
-
-- WPF text positions,
-- Markdown source offsets,
-- Windows clipboard text,
-- files loaded from disk.
-
-------
-
-# 6. Testing Architecture
-
-Tests use:
-
-- xUnit v3,
-- Microsoft.Testing.Platform,
-- STA execution where required for WPF.
-
-WPF tests must run in an STA context where required.
-
-Use the project's established `StaTest.Run` mechanism rather than inventing another threading mechanism.
+- view positions (`{ paragraph, index }`) and source offsets,
+- a line ending inside a paragraph (one character of the view: a space, or U+2028),
+- clipboard text, which may have any line ending,
+- `value`, and what the element submits in a form.
 
 ------
 
-# 7. Test Execution
+# 6. Testing
 
-The project uses the newer Microsoft.Testing.Platform test experience.
+The tests run in the browser: start `tools/serve.ps1` (or the `markdown-editor-web` launch
+configuration), then open `http://localhost:8765/test/index.html`.
 
-Do not assume older `dotnet test` behavior, adapters, or command-line conventions without checking the current project configuration.
-
-Each `*.Tests` project builds an executable. These commands are known to work here; the second runs one test class, given by its fully qualified name (the runner does not accept `--filter-class`):
-
-```bash
-dotnet run --project MaxWrite.Tests -c Release
-dotnet run --project OptimaxTools.RichText.Tests -c Release --no-build -- -class OptimaxTools.RichText.Tests.SoftBreakTests
-```
-
-After modifying editor semantics:
-
-1. Build the solution.
-2. Run the complete test suite: every `*.Tests` project in the solution, not only the one nearest the change.
-3. Report failures accurately.
-4. Do not change tests merely to make a regression appear to pass.
-
-When a test fails because the intended product behavior has deliberately changed, update the test only after confirming that the new behavior is correct.
-
-It is not necessary to run the complete test suite for changes localized to a particular project. In this case, run that project's tests. In general, you should run only targeted test classes during active development and reserve full suite runs for milestones or when changes touch shared libraries.
+- `?suites=parser,commands` runs some of the suites; `?steps=150` makes the random test
+  (random commands, undone and redone) longer.
+- The results are also in `window.testResults` (`passed`, `failed`, `failures`), for a script
+  that drives the page.
+- Every suite passes before a change is committed. Run the longer random test (`?steps=150`)
+  for changes to the parser, the projection, the commands or the controller.
+- Timings are only good with the browser pane in sight: a page out of sight runs as a
+  background page, several times slower, and with no animation frames at all.
+- Do not change a test merely to make a regression appear to pass. When the intended
+  behavior has deliberately changed, change the test only after confirming that the new
+  behavior is right, and say so.
 
 ------
 
-# 8. Regression Discipline
+# 7. Regression Discipline
 
-A small change can affect apparently unrelated behavior even in a different application.
+A small change can affect apparently unrelated behavior. Before changing rendering or
+editing, inspect every layer it passes through (parser, projection, commands, controller,
+view), and consider its effect on:
 
-Before modifying rendering or editing behavior, inspect all applicable layers.
+- the map between the view and the source (caret, selection, syntax shown at the caret),
+- Enter, Shift+Enter, Backspace, Delete and Tab, in every kind of block,
+- undo and redo,
+- the clipboard (copy giving Markdown, paste reading it),
+- formatting, inline and by paragraph,
+- tables (a cell's pipes),
+- the raw Markdown view,
+- incremental parsing (a change read again in part must give what a whole reading gives),
+- the `<markdown-editor>` element and its form value.
 
-When changing code, consider regression effects on:
-
-- caret mapping,
-- Enter,
-- Shift+Enter,
-- Backspace,
-- undo/redo,
-- clipboard,
-- formatting.
-
-A project's own `AGENTS.md` lists further areas that are specific to it.
-
-Do not stop after verifying only the originally reported visual symptom.
-
-Always keep in mind both applications, MaxPad and MaxWrite.
+Do not stop after verifying only the originally reported symptom.
 
 ------
 
-# 9. Source Modification Rules
+# 8. Source Modification Rules
 
 These rules are mandatory for coding-agent work.
 
-## Rule 1 — Verify Version-Sensitive Syntax
+## Rule 1 — Verify Browser APIs
 
-Check APIs and syntax against the actual framework/package versions used by the repository.
+Check a browser API against what the browsers in use support before using it. Do not provide
+an API that is not there and correct it later.
 
-Do not provide obsolete syntax and correct it later.
+## Rule 2 — Identify File and Function
 
-## Rule 2 — Identify File and Method
+For every code change delivered directly to chat, identify the exact file path, the class
+where useful, and the exact method or function being changed.
 
-For every code change delivered directly to chat, explicitly identify:
+## Rule 3 — Complete Replacement Functions
 
-- exact file path,
-- class where useful,
-- exact method being modified.
+When an existing function must be changed interactively in chat, give the complete
+replacement function, not fragments with instructions such as "add this after line X",
+unless asked to.
 
-## Rule 3 — Complete Replacement Methods
+## Rule 4 — Keep Lines Intact
 
-When an existing method must be modified interactively in chat, provide the complete replacement method.
+Keep lines of code under about 125 characters, and do not wrap them needlessly.
 
-Do not provide fragments with instructions such as:
-
-> Add this after line X.
-
-unless explicitly requested.
-
-## Rule 4 — Keep Code Lines Intact
-
-Do not unnecessarily wrap generated source lines.
-
-Keep generated lines of code to less than approximately 125 characters. This limit is for actual executable code (C#, XAML and the like).
-
-Markdown (`.md`) files that you generate are different: keep every line under 96 characters long, wrapping prose at word boundaries. Where wrapping would break the content (a table row, a URL), leave that line as it is.
-
-Furthermore, any code blocks that you generate inside the markdown files must be kept down to less than 80 characters per line.
-
-When re-generating .md files, you need to make sure each time that they comply with the above rule, and re-wrap them in their entirety to the then-current standard, since they may have been changed or they reflect legacy standards.
+Keep every line of a Markdown (`.md`) file you write under 96 characters, wrapping prose at
+word boundaries; a line that wrapping would break (a table row, a URL) stays as it is. Keep
+the lines of a code block inside a Markdown file under 80 characters. When writing a `.md`
+file again, make the whole of it comply.
 
 ## Rule 5 — One Considered Implementation
 
-Validate the approach before presenting it.
-
-Provide one considered implementation for each development step rather than proposing code and immediately revising it.
+Validate the approach before presenting it. Give one considered implementation for each
+step rather than proposing code and revising it at once.
 
 ## Rule 6 — Inspect Current Source
 
-Always inspect the current source before making changes.
-
-Do not assume the source matches an earlier conversation, ZIP, or handoff.
-
-The user may introduce changes even while you are working on something, so always monitor the files you are changing.
+Always inspect the current source before changing it. Do not assume it matches an earlier
+conversation, archive or handoff. The user may change files while you work: watch the files
+you are changing.
 
 ## Rule 7 — Minimal Changes
 
-Change only files necessary for the requested work.
-
-Avoid unrelated:
-
-- refactoring,
-- formatting,
-- renaming,
-- cleanup,
-- dependency changes.
-
-Feel free to suggest code improvements and refactorings, but first complete the task at hand, then present them and wait for approval before making them.
+Change only the files the requested work needs. Avoid unrelated refactoring, formatting,
+renaming and clean-up. Suggest improvements freely, but finish the task at hand first, then
+present them and wait for approval.
 
 ## Rule 8 — Preserve Existing Behavior
 
-Do not remove or simplify existing features merely to make a new feature easier to implement. Always ask for the rationale behind something that may seem like an overkill or overengineering.
+Do not remove or simplify existing features merely to make a new one easier. Ask for the
+rationale behind something that seems overkill.
 
-## Rule 9 — Do NOT Clobber Changes by Others
+## Rule 9 — Do Not Clobber Changes by Others
 
-Be aware that other agents or the user you interact with may be making changes concurrently to you. 
+Other agents or the user may be changing files at the same time. Never blindly overwrite a
+file that changed since you read it: reconcile the differences, or tell the user, describe
+the problem, propose solutions and let them decide.
 
-Sometimes these changes may conflict with what you are trying to do. Never blindly overwrite files that have changed since you last read them. Attempt to reconcile the differences and come up with a consistent merge if possible. Otherwise alert the user, describing the problem, proposing solution or solutions, and let them decide what to do.
+## Rule 10 — Third-Party Code
 
-## Rule 10 — Keep the Third-Party Notices Current
+The editor redistributes nothing of anyone else's. If that ever changes (a dependency, a
+copied file), the user decides first, and a `THIRD-PARTY-NOTICES.md` reproducing its license
+comes with it.
 
-The programs are commercial software, and `THIRD-PARTY-NOTICES.md` at the root reproduces
-the license of everything they redistribute; each program copies it beside itself. Whenever
-a package that ships with a program is added, upgraded or removed (its own dependencies
-included), update that file in the same change: the component, its version, which program
-uses it, and its license text as it is at that version.
+------
 
-## Rule 11 — Keep Tooltips Narrow
+# 9. Documentation
 
-No tooltip in any program is wider than about 350 device-independent pixels (the user,
-2026-09-27). A long one wraps, and a blank line in its text starts a new paragraph. Make it
-with `MaxServices.Core.Shell.MenuToolTips.Create` (its width is `MenuToolTips.MaxWidth`) rather
-than by setting a plain string as a `ToolTip`, which WPF draws on one line however long it is.
+- **`documents/implementation.md`** describes how the editor works. Every change to how it
+  works updates it in the same change (2026-11-03, the user: "Keep this document in sync as
+  changes are implemented"): a module, a rule of the projection or the editing, a key, an
+  option, an event, a test suite, a measured cost.
+- **`documents/user-manual.md`** says what the editor does. A change to what a user sees or a
+  page uses updates it too; its chapter 38 lists the known limits, and a fix takes its entry
+  off.
+- **`README.md`** keeps its tables of options, members, events and keys current.
 
 ------
 
 # 10. Deliverable Rules
 
-When returning source changes as a ZIP:
+When returning changes as a ZIP:
 
-1. Include only changed files unless a complete solution was explicitly requested.
-Files to be deleted should also be present in the archive with `_DELETE` appended to their filename (before the extension, so that the extension does not change).
-2. Preserve the complete folder hierarchy in the archive being delivered.
-3. Include the **MarkdownTools root directory itself** in the archive.
+1. Include only changed files unless the whole project was asked for. A file to be deleted
+   is in the archive with `_DELETE` before its extension.
+2. Keep the folder hierarchy, with the **MarkdownEditor.Web root folder itself** in the
+   archive:
 
-Correct:
+   ```text
+   MarkdownEditor.Web.202611111500.zip
+   └── MarkdownEditor.Web/
+       └── src/
+           └── ChangedFile.js
+   ```
 
-```text
-MarkdownTools.202609171500.zip
-└── MarkdownTools/
-    └── ProjectName/
-        ├── ChangedFile.cs
-        └── AnotherChangedFile.cs
-```
-
-Incorrect:
-
-```text
-MarkdownTools.202609171500.zip
-├── ChangedFile.cs
-└── AnotherChangedFile.cs
-```
-
-Exclude generated/build/repository directories unless explicitly required:
-
-- `bin`
-- `obj`
-- `publish`
-- `.vs`
-- `.git`
-- `.claude` (Claude Code's local settings and its worktrees, whole copies of the repository)
+3. Leave out `.git`, `.claude` (Claude Code's local settings and its worktrees) and
+   `node_modules`.
 
 ------
 
-# 11. Build and Verification
+# 11. Verification
 
-After modifying source, build the relevant project whenever the environment permits.
+There is no build. After changing the source:
 
-Run tests appropriate to the affected behavior.
-
-Report separately:
-
-- compiler errors,
-- compiler warnings,
-- test failures.
-
-Do not claim a successful build unless the build was actually run and was successful.
-
-Do not claim interactive editor behavior was tested unless the application was actually exercised interactively.
-
-If only compilation and automated tests were performed, say so.
+- run the tests (section 6), and report test failures, and errors in the browser's console,
+  separately;
+- for what a user sees, look at it in the browser (`demo/index.html`, `demo/element.html`),
+  and say what was tried there;
+- do not claim interactive behavior was tested unless it was exercised in the browser;
+- say what was not tried (another browser, a phone, a screen reader, a Mac).
 
 ------
 
 # 12. Things Not to Change Without Asking
 
-Do not make these architectural/product changes without explicit approval:
-
-- WPF to another UI framework
-- .NET target framework
-- MarkDig parser
-- WYSIWYG architecture
-- CommonMark baseline
-- test framework
-- major keyboard conventions (feel free to suggest if the convention differs from commonly accepted standards)
-- introduction of HTML/WebView rendering
-- major third-party editor frameworks
-- proprietary document formats (an application-specific file format that is saved; the in-memory DOM is not one)
-
-A project's own `AGENTS.md` may add to this list.
+- Plain JavaScript with no framework, build step or dependency.
+- The source-is-authority design: the projection of the source, edits as changes of the
+  source, the view's own editing unused for Markdown.
+- The CommonMark baseline and MaxPad's extensions.
+- The browser test runner.
+- Major keyboard conventions (MaxPad's keys; suggest where a convention differs from what is
+  commonly accepted).
+- The public API: the options, properties, methods and events of `MarkdownEditor`, and the
+  attributes, properties and events of `<markdown-editor>`, beyond additions.
+- Rendering the Markdown as HTML (`contenteditable`, `innerHTML` of the document) in place of
+  the view.
 
 ------
 
-# 13. Starting a New Agent Session
+# 13. Starting an Agent Session
 
-Before modifying source:
+Before changing source:
 
 1. Read this `AGENTS.md` completely.
-2. Read the `AGENTS.md` of every project you are going to change (for example `MaxPad\AGENTS.md`).
-3. Read `HANDOFF.md`, if present, and then the `handoff.md` of the application you are going
-   to change (`MaxWrite\handoff.md` or `MaxPad\handoff.md`).
-4. Inspect the current solution/project structure.
-5. Inspect the current source involved in the task.
-6. Inspect relevant tests before changing behavior.
-7. Check CommonMark semantics for Markdown parsing questions.
-8. Check actual Markdig behavior/API when relevant.
-9. Build the current baseline when practical.
-10. Treat current source as authoritative over previous chats and stale notes.
+2. Read `handoff.md`, and the sections of `documents/implementation.md` the task touches.
+3. Inspect the current source involved in the task, and its tests.
+4. Check CommonMark (and Markdig, commonmark.js) for questions of Markdown.
+5. Run the tests for a baseline.
+6. Treat the current source as authoritative over earlier chats and stale notes.
 
-Do not begin implementing a fix based solely on a previous agent's description of the code.
+Do not begin a fix based solely on a previous agent's description of the code.
 
 ------
 
 # 14. Ending an Agent Session
 
-Before handing work to another agent, update the `handoff.md` of the application you worked
-on (`MaxWrite\handoff.md` or `MaxPad\handoff.md`). Update `HANDOFF.md` too only if what you
-learned is shared: it concerns both applications or a shared library.
+Before handing work to another agent, update `handoff.md`: the current objective, the work
+completed, the important design decisions, the test results, unresolved bugs, regressions
+found, and the recommended next step. Remove what is obsolete, so that it describes the
+current state, not a diary. Durable lessons every agent should know belong in this file.
 
-Record:
-
-- current objective,
-- completed work,
-- exact files changed,
-- important design decisions,
-- build result,
-- test result,
-- unresolved bugs,
-- regressions discovered,
-- recommended next step.
-
-Do not turn the handoff into an append-only development diary.
-
-Remove obsolete information so it describes the **current project state**.
-
-Durable lessons that future agents should always know belong in this `AGENTS.md`, not in an ever-growing handoff.
-
-This AGENTS.md should not be a project-specific set of instructions. Keep it generic enough, so that it remains applicable across all projects in the solution. Add AGENTS.md at a project level if needed, but always alert the user to any changes you make to AGENTS.md files anywhere.
+Tell the user of any change you make to this `AGENTS.md`.
 
 ------
 
 # 15. Suspending an Agent Session
-When running autonomously on a series of tasks and the current session reaches 95% of either weekly or hourly limit, preserve enough information to continue after the pause, then pause it safely, so that the limits are not breached, unless the user explicitly directs otherwise. Wait for the user to resume the session after the limits have been lifted.
+
+When running autonomously on a series of tasks and the session reaches 95% of either its
+weekly or its hourly limit, keep enough information to go on after the pause, then pause
+safely, so that the limits are not breached, unless the user says otherwise. Wait for the
+user to resume the session after the limits are lifted.
 
 ------
 
 # 16. Committing Changes to git
 
-When working on an assigned task, work in a git branch specific to that task, with a name starting with `claude/`. Commit changes to git when you are done with a task. 
+Work in a git branch of the task's own, its name starting with `claude/`. Commit when the
+task is done, to the **local repository only**. **Push only when the user says so**, and
+merge into `main` only when the user, or `TO-DO-INSTRUCTIONS.md`, says so (as a
+fast-forward: the history stays a straight line).
 
-When you commit your changes, collect all the files you worked on and commit them to **local repository only**. **You are allowed to push ==only== if the user explicitly instructs you to.**
+Commit as `Claude@<machineName>` with the e-mail `claude+<machineName>@anthropic.com` (or the
+appropriate agent's name, if you are not Claude), `<machineName>` being the Windows machine's
+name. Do not put a `Co-Authored-By:` line, or anything like it, in the commit message.
 
-When committing your changes to local, identify yourself as Claude@<machineName> with email claude+<machineName>@anthropic.com (or the appropriate Agent name, if you are not Claude). <machineName> is the local Windows machine name.
+Git writes the working files with CRLF line endings on checkout: a scripted edit has to allow
+`\r\n`.
 
-Do not put the signature 
-
-​    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-
-(or anything similar) in the commit comments themselves.
+------
 
 # 17. Authority
 
 When instructions conflict, use this priority:
 
 1. Explicit user instruction for the current task.
-2. Project-specific `AGENTS.md`, if one exists.
-3. This root `AGENTS.md`.
-4. `HANDOFF.md`, and the `handoff.md` of the application, for current-state information.
-5. Existing source conventions.
+2. This `AGENTS.md`.
+3. `handoff.md`, for the current state.
+4. Existing source conventions.
 
-The current source tree is authoritative regarding what is actually implemented.
-
-When a proposed change would materially alter established application behavior and/or the desired behavior is not clear, ask before implementing it.
+The current source tree is authoritative regarding what is actually implemented. When a
+change would materially alter established behavior, or the desired behavior is not clear,
+ask before implementing it.

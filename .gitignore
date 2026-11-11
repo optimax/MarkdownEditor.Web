@@ -1,94 +1,29 @@
-# ============================================
-# Visual Studio / .NET / C# / WPF
-# ============================================
+# MarkdownEditor.Web: plain JavaScript, no build step and no dependencies, so there is no
+# build output to ignore; only what editors, tools and the operating system leave behind.
 
-# Visual Studio user-specific files
+# Claude Code's local settings and its worktrees (its launch.json starts the server for
+# Claude's browser)
+.claude/
+
+# Editors
+.vs/
+.vscode/
+.idea/
 *.suo
 *.user
-*.userosscache
-*.sln.docstates
-*.userprefs
+*.swp
+*~
 
-# Visual Studio workspace/cache
-.vs/
-
-# Build output
-[Bb]in/
-[Oo]bj/
-[Dd]ebug/
-[Rr]elease/
-x64/
-x86/
-[Aa][Rr][Mm]/
-[Aa][Rr][Mm]64/
-
-# .NET build artifacts
-artifacts/
-TestResults/
-
-# NuGet packages
-*.nupkg
-# Our own packages made in Optimax.Shared.Lib, kept so that MarkdownTools builds by itself (nuget.config).
-!LocalPackages/*.nupkg
-*.snupkg
-**/[Pp]ackages/*
-!**/[Pp]ackages/build/
-!**/[Pp]ackages/repositories.config
-
-# NuGet generated files
-*.nuget.props
-*.nuget.targets
-
-# Visual Studio generated files
-Generated\ Files/
-*.VC.db
-*.VC.VC.opendb
-*.opendb
-
-# ReSharper
-_ReSharper*/
-*.[Rr]e[Ss]harper
-*.DotSettings.user
-
-# JetBrains Rider
-.idea/
-*.sln.iml
-
-# VS Code
-.vscode/
-
-# Code coverage
-*.coverage
-*.coveragexml
-coverage/
-coverage.*
-coverage*.xml
-
-# BenchmarkDotNet
-BenchmarkDotNet.Artifacts/
-
-# Publish output
-publish/
-
-# ClickOnce
-publish/
-*.application
-*.deploy
-*.manifest
-
-# WPF / XAML generated files
-*.g.cs
-*.g.i.cs
-*.baml
+# Node, should a tool ever be run here (the project itself has no dependencies)
+node_modules/
+npm-debug.log*
 
 # Temporary files
 *.tmp
 *.temp
 *.log
 *.bak
-*.old
 *.orig
-*.cache
 
 # Windows
 Thumbs.db
@@ -96,22 +31,5 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-# OS generated files
+# macOS
 .DS_Store
-
-# Database temporary/local files
-*.db-shm
-*.db-wal
-
-# Local configuration / secrets
-appsettings.Local.json
-appsettings.Development.local.json
-secrets.json
-
-# Certificates / keys
-*.pfx
-*.p12
-
-# Backup files
-*.backup
-*.Backup
