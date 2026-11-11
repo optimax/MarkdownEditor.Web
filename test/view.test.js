@@ -152,3 +152,31 @@ test('positions, text and selection', () => {
     view.setCaret(pos(9, 9));
     equal(view.caret, pos(1, 3), 'clamped to the document');
 });
+
+test('a right-click puts the text area under the pointer, for the browser\'s Cut, Copy and Paste', async () => {
+    const { view } = makeView(['Hello world', 'second']);
+    document.getElementById('stage').scrollIntoView();
+    view.focus();
+    const rect = view.getCaretRect(pos(0, 8));
+    const x = rect.left + 1, y = rect.top + rect.height / 2;
+    const rightClick = () => {
+        const init = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 2 };
+        view.scroller.dispatchEvent(new MouseEvent('mousedown', init));
+        view.scroller.dispatchEvent(new MouseEvent('contextmenu', init));
+    };
+    view.select(pos(0, 0), pos(0, 5));
+    rightClick();
+    equal([view.caret, view.selection], [pos(0, 8), null], 'outside the selection: the caret put there');
+    equal(document.elementFromPoint(x, y) === view.input, true, 'the text area under the pointer');
+    equal(view.input.value, '', 'nothing to cut or copy');
+    view.select(pos(0, 6), pos(0, 11));
+    rightClick();
+    equal(view.selection, { start: pos(0, 6), end: pos(0, 11) }, 'inside the selection: kept');
+    equal([view.input.value, view.input.selectionStart, view.input.selectionEnd], [' ', 0, 1], 'Cut and Copy offered');
+    const data = new DataTransfer();
+    view.input.dispatchEvent(new ClipboardEvent('copy', { clipboardData: data, bubbles: true, cancelable: true }));
+    equal(data.getData('text/plain'), 'world', 'the menu\'s Copy');
+    equal(document.activeElement === view.input, true, 'the focus kept');
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    equal(document.elementFromPoint(x, y) === view.input, false, 'back at the caret');
+});

@@ -1191,6 +1191,11 @@ the same.
 
 Ctrl+X cuts (as does Shift+Delete). Pasted in a table cell, line breaks become spaces.
 
+**The right-click menu** has the browser's Cut, Copy, Paste and Delete, and they do what the
+keys do. A right-click outside the selection first puts the caret where it was clicked, as a
+click does; one inside the selection keeps it, to cut or copy it. (The menu's Select All
+selects nothing of the document: use Ctrl+A.)
+
 ## 23. The raw Markdown view
 
 Ctrl+Shift+R, or the toolbar's Markdown source button, shows the document as the Markdown

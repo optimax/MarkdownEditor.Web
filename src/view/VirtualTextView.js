@@ -207,6 +207,7 @@ export class VirtualTextView extends EventTarget {
 
     /** Takes the view out of its host and lets go of what it listens to. */
     destroy() {
+        clearTimeout(this._menuTimer);
         this._resizeObserver.disconnect();
         this._unwire?.();
         this.scroller.remove();
@@ -2010,6 +2011,7 @@ export class VirtualTextView extends EventTarget {
                 this.dispatchEvent(new Event('blur'));
             }),
             on(this.scroller, 'mousedown', (e) => this._onMouseDown(e)),
+            on(this.scroller, 'contextmenu', (e) => this._onContextMenu(e)),
             on(this.scroller, 'scroll', () => this._onScroll(), { passive: true }),
             on(this.host, 'mousedown', (e) => {
                 if (e.target === this.host) {
@@ -2119,6 +2121,7 @@ export class VirtualTextView extends EventTarget {
         const commands = {
             insertLineBreak: 'softBreak', insertParagraph: 'enter', deleteContentBackward: 'backspace',
             deleteContentForward: 'delete', deleteWordBackward: 'deleteWordBack', deleteWordForward: 'deleteWordForward',
+            deleteContent: 'delete', // (the Delete of the menu a right-click opens)
         };
         if (type === 'insertText' || type === 'insertReplacementText') {
             e.preventDefault();
@@ -2209,11 +2212,20 @@ export class VirtualTextView extends EventTarget {
 
     // ---- Mouse ----------------------------------------------------------------------------------------------------
 
+    // Whether a point (client coordinates) is on the scroller's scroll bars.
+    _onScrollBar(e) {
+        const rect = this.scroller.getBoundingClientRect();
+        return e.clientX - rect.left >= this.scroller.clientWidth || e.clientY - rect.top >= this.scroller.clientHeight;
+    }
+
     _onMouseDown(e) {
+        if (e.button === 2 && !this._onScrollBar(e)) {
+            e.preventDefault(); // (the focus stays in the text area: the menu that follows is its, `_onContextMenu`)
+            this.focus();
+            return;
+        }
         if (e.button !== 0) return;
-        const scrollerRect = this.scroller.getBoundingClientRect();
-        if (e.clientX - scrollerRect.left >= this.scroller.clientWidth ||
-            e.clientY - scrollerRect.top >= this.scroller.clientHeight) return; // (a scroll bar)
+        if (this._onScrollBar(e)) return;
         e.preventDefault();
         this.focus();
         const page = this._pageRect();
@@ -2282,6 +2294,41 @@ export class VirtualTextView extends EventTarget {
         };
         window.addEventListener('mousemove', move);
         window.addEventListener('mouseup', up);
+    }
+
+    // A right-click: the browser's menu is made the text area's -- its Cut, Copy and Paste the view's, through the
+    // clipboard events -- by putting the text area under the pointer for a moment, holding the selection as `_syncInput`
+    // keeps it (a selected character while something is selected, so that Cut and Copy are offered). A click outside the
+    // selection first puts the caret there, as a click does; one inside it keeps it. The menu works on the text area
+    // that has the focus wherever it is, so it goes back to the caret soon after (`_restoreInput`).
+    _onContextMenu(e) {
+        if (this._onScrollBar(e)) return;
+        const page = this._pageRect();
+        const hit = this._hit(e.clientX - page.left, e.clientY - page.top);
+        const selection = this.selection;
+        const inside = selection && hit && comparePositions(selection.start, hit.position) <= 0 &&
+            comparePositions(hit.position, selection.end) <= 0;
+        if (hit && !inside) {
+            this.caret = this.anchor = this._clamp(hit.position);
+            this.affinity = hit.affinity;
+            this._caretMoved(false);
+        }
+        this.focus();
+        this._syncInput();
+        const input = this.input.style;
+        input.left = `${e.clientX - page.left - 8}px`;
+        input.top = `${e.clientY - page.top - 8}px`;
+        input.width = input.height = '16px';
+        input.pointerEvents = 'auto';
+        input.zIndex = '10';
+        clearTimeout(this._menuTimer);
+        this._menuTimer = setTimeout(() => this._restoreInput(), 100);
+    }
+
+    _restoreInput() {
+        const input = this.input.style;
+        input.width = input.height = input.pointerEvents = input.zIndex = '';
+        this._drawOverlay();
     }
 
     // ---- Caret moves --------------------------------------------------------------------------------------------
