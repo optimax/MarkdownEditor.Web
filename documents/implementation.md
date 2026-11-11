@@ -325,6 +325,11 @@ The browser lays the text out; the view reads the geometry back with DOM ranges.
   and its modifiers. Backspace takes a code point, so an accent goes by itself (as in the
   control). A word is a run of letters and digits, of spaces, or of punctuation.
 - Home and End go to the ends of the line the caret is on, a wrapped line's own.
+- On a Mac (`mac`, from `navigator.platform`; a test may set it), Cmd+Left and Cmd+Right go
+  to the ends of the line, Cmd+Up and Cmd+Down to those of the document (with Shift, they
+  select), and Cmd+Backspace and Cmd+Delete delete to the start or the end of the line
+  (`_deleteToLineEdge`: that stretch selected, then a Backspace or a Delete over it, one
+  command; at the line's edge, a plain one). Option with them is Ctrl's, by word.
 - Up and Down go to the line above or below at the column the caret had (`preferredX`). From
   a paragraph's first or last line they go to the next paragraph's nearest line, one by one,
   so that a collapsed paragraph (a hidden fence) is reached too. In a table they go to the
@@ -362,7 +367,8 @@ What a host calls:
 | `getStyleName(i)` | The name the gutter gives a paragraph (section 4.10). |
 | `copy`, `cut`, `paste`, `focus`, `destroy` | As their names say. |
 
-Properties: `readOnly`, `acceptsTab`, `wordWrap`, `showFormattingMarks`, `zoom` (every size
+Properties: `readOnly`, `acceptsTab`, `mac` (a Mac's keys, section 4.8), `wordWrap`,
+`showFormattingMarks`, `zoom` (every size
 scaled), `padding`, `leftGutterContent` and `paragraphLabels` (section 4.10),
 `styleProvider`, `editRecorder`,
 `keymap`, `imageResolver` (an image's address to the URL it is loaded from), `version`
@@ -1123,7 +1129,7 @@ the suites; `?steps=150` makes the random test longer.
 | `projection.test.js` | blank lines, hidden and shown syntax (`⟦hidden⟧`, `⟨concealed⟩`), styles, list markers, and that every paragraph is its stretch of the source and every position maps to the source and back |
 | `commands.test.js` | each editing rule (Tab on bullets and numbered items among them; pipes and backslashes typed, pasted or taken out of a table cell, the row keeping its cells), the formats, the paragraph types, the links (made, their address changed, taken away) and the pictures (their description and address escaped), written with `¦` for the caret and `«...»` for a selection, as MaxPad.Editing.Tests write theirs |
 | `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits, the gutter's numbers (a table's row one, its room taken and given back) and names (outside the numbers, on their line, the host's first, a long one cut); the outline (a heading folding what it heads, the caret stepping over it, a heading replaced by its like staying collapsed, a caret put in a fold opening it); a right-click (the text area under the pointer, the caret put outside the selection and the selection kept inside it, the menu's Copy, the text area back at the caret) |
-| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); a Markdown heading edited and undone staying collapsed; the page's own toolbar buttons; no syntax in a read-only editor, and no undo or redo in it; Ctrl+K in a link; Tab on a numbered item; the toolbar from the keyboard (one Tab stop, the arrows, Home, End, Alt+F10, Escape) and Escape then Tab out of the text; a file dropped on the text or the toolbar refused, a page's own listener after the editor's |
+| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); a Markdown heading edited and undone staying collapsed; the page's own toolbar buttons; no syntax in a read-only editor, and no undo or redo in it; Ctrl+K in a link; Tab on a numbered item; a Mac's Cmd with the arrows, Backspace and Delete; the toolbar from the keyboard (one Tab stop, the arrows, Home, End, Alt+F10, Escape) and Escape then Tab out of the text; a file dropped on the text or the toolbar refused, a page's own listener after the editor's |
 | `raw.test.js` | the raw view's paragraphs and its map to the source (every offset there and back); looking that changes nothing; text changed in it as one undo step; no formats in it; the paragraph numbers and types of the two views agreeing, a line's type following its text |
 | `element.test.js` | `<markdown-editor>`: the Markdown in a `<template>` read as written (a quote's `>`, an `&`, its HTML); a form's reset bringing back the Markdown each element was given, and the form sending it |
 

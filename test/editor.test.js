@@ -402,6 +402,32 @@ test('a read-only editor undoes and redoes nothing', async () => {
     editor.readOnly = false;
 });
 
+test('a Mac\'s Cmd with the arrows, Backspace and Delete: the ends of the line and of the document', async () => {
+    const editor = makeEditor('one two\n\nthree four');
+    editor.view.mac = true;
+    editor.select(4);
+    const caret = () => editor.selection.caret;
+    await press(editor, 'ArrowRight', { metaKey: true });
+    equal(caret(), 7, 'Cmd+Right: the line\'s end');
+    await press(editor, 'ArrowLeft', { metaKey: true });
+    equal(caret(), 0, 'Cmd+Left: its start');
+    await press(editor, 'ArrowDown', { metaKey: true });
+    equal(caret(), 19, 'Cmd+Down: the document\'s end');
+    await press(editor, 'ArrowUp', { metaKey: true, shiftKey: true });
+    equal(editor.selection, { anchor: 19, caret: 0 }, 'Cmd+Shift+Up: selected to its start');
+    editor.select(15);
+    await press(editor, 'Backspace', { metaKey: true });
+    equal(editor.value, 'one two\n\nfour', 'Cmd+Backspace: the line before the caret');
+    await press(editor, 'Delete', { metaKey: true });
+    equal(editor.value, 'one two\n\n', 'Cmd+Delete: the line after it');
+    checkView(editor);
+    editor.view.mac = false;
+    editor.value = 'ab';
+    editor.select(2);
+    await press(editor, 'Backspace', { metaKey: true });
+    equal(editor.value, 'a', 'not on a Mac: a Backspace');
+});
+
 test('the toolbar is one Tab stop, its arrows going from control to control; Alt+F10 and Escape', () => {
     const stage = document.getElementById('stage');
     stage.replaceChildren();

@@ -180,6 +180,7 @@ export class VirtualTextView extends EventTarget {
         this.preferredX = null;
         this.keymap = new Map();
         this.clipboard = options.clipboard ?? null;
+        this.mac = isMac; // (a Mac's keys: Cmd with the arrows, Backspace and Delete)
 
         this._styleProvider = options.styleProvider ?? null;
         this.editRecorder = options.editRecorder ?? null;
@@ -2060,20 +2061,27 @@ export class VirtualTextView extends EventTarget {
             return;
         }
         const shift = e.shiftKey;
-        const word = e.ctrlKey || e.altKey || (isMac && e.metaKey && false);
+        const word = e.ctrlKey || e.altKey;
+        // (a Mac's Cmd with the arrows: the ends of the line and of the document; with Backspace and Delete, what is
+        // before the caret on its line, or after it)
+        const mac = this.mac && e.metaKey && !e.ctrlKey;
         const handled = () => e.preventDefault();
         switch (e.key) {
             case 'ArrowLeft':
                 handled();
+                if (mac) return this._move((p) => this._lineEdge(p, -1), shift, 0);
                 return this._move((p) => (word ? this._wordMove(p, -1) : this._charMove(p, -1)), shift, -1);
             case 'ArrowRight':
                 handled();
+                if (mac) return this._move((p) => this._lineEdge(p, 1), shift, 0, 'backward');
                 return this._move((p) => (word ? this._wordMove(p, 1) : this._charMove(p, 1)), shift, 1);
             case 'ArrowUp':
                 handled();
+                if (mac) return this._move(() => pos(0, 0), shift, 0);
                 return this._vertical(-1, shift);
             case 'ArrowDown':
                 handled();
+                if (mac) return this._move(() => this._documentEnd(), shift, 0);
                 return this._vertical(1, shift);
             case 'Home':
                 handled();
@@ -2093,9 +2101,11 @@ export class VirtualTextView extends EventTarget {
                 return this._command(shift ? 'softBreak' : 'enter');
             case 'Backspace':
                 handled();
+                if (mac) return this._deleteToLineEdge(-1);
                 return this._command(e.ctrlKey || e.altKey ? 'deleteWordBack' : 'backspace');
             case 'Delete':
                 handled();
+                if (mac) return this._deleteToLineEdge(1);
                 if (shift && !e.ctrlKey && this.selection) return this.cut();
                 return this._command(e.ctrlKey || e.altKey ? 'deleteWordForward' : 'delete');
             case 'Tab':
@@ -2339,6 +2349,18 @@ export class VirtualTextView extends EventTarget {
         const input = this.input.style;
         input.width = input.height = input.pointerEvents = input.zIndex = '';
         this._drawOverlay();
+    }
+
+    // A Mac's Cmd+Backspace (`direction` -1) and Cmd+Delete (1): what is between the caret and the start or the end of its
+    // line (a wrapped line's own) is selected and deleted, one command as a selection's Backspace or Delete is; at the
+    // line's edge already, or with a selection, a Backspace or a Delete.
+    _deleteToLineEdge(direction) {
+        if (!this.caret) return;
+        const command = direction < 0 ? 'backspace' : 'delete';
+        if (this.selection) return this._command(command);
+        const edge = this._clamp(this._lineEdge(this.caret, direction));
+        if (!samePosition(edge, this.caret)) this.select(this.caret, edge, { scroll: false });
+        this._command(command);
     }
 
     // ---- Caret moves --------------------------------------------------------------------------------------------

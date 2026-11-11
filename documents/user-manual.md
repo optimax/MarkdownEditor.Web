@@ -1318,6 +1318,9 @@ page; the browser's own page zoom is not touched by Ctrl and the wheel over the 
 | Ctrl+A | Select all |
 | Escape | Drop the selection |
 | Escape, then Tab or Shift+Tab | Leave the editor (Tab alone is the editor's) |
+| On a Mac: Cmd+Left, Cmd+Right | The start or end of the line; with Shift, select |
+| On a Mac: Cmd+Up, Cmd+Down | The start or end of the document; with Shift, select |
+| On a Mac: Cmd+Backspace, Cmd+Delete | Delete to the start or the end of the line |
 | Alt+F10 | To the toolbar (Escape comes back) |
 | Ctrl+Shift+R | The raw Markdown view on or off |
 | Ctrl and the mouse wheel | Zoom |
@@ -2152,7 +2155,8 @@ milliseconds. Nothing needs to be done for it.
 
 - **Browsers.** Tried in Chrome. Firefox, Safari, the keyboards of phones and tablets, and
   input methods (for Chinese, Japanese, Korean...) have not been tried, though the code for
-  them is there. On a Mac, Cmd should do what Ctrl does; that has not been tried either.
+  them is there. On a Mac, Cmd should do what Ctrl does, and Cmd with the arrows, Backspace
+  and Delete what a Mac's do (chapter 26); that has been tried only by a test, not on a Mac.
 - **Tables:** no commands to add or delete columns, delete rows or set alignment; use the
   raw Markdown view.
 - **Code is not colored** by its language.
