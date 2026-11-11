@@ -12,7 +12,8 @@
 // the items wanted, in order, separated by spaces or commas: "undo redo | strong em"), `readonly`,
 // `name` (the field's name in a form: the element is a form field whose value is the Markdown), `image-base`,
 // `paragraph-numbers` (each paragraph's number in a gutter), `paragraph-types` (each paragraph's type there),
-// `outline` (headings that can be collapsed: marks beside them that fold what they head).
+// `outline` (headings that can be collapsed: marks beside them that fold what they head), `screen-reader` ("auto",
+// "on" or "off": the editor's screen reader mode).
 // Properties: `value`, `editor` (the MarkdownEditor). Events: 'input' and 'change' after each of the user's changes (as a
 // <textarea>'s: not for a value a script sets, a form's reset or a `src` file), 'linkclick'.
 
@@ -62,6 +63,7 @@ export class MarkdownEditorElement extends HTMLElement {
     static formAssociated = true;
     static observedAttributes = [
         'readonly', 'theme', 'src', 'image-base', 'paragraph-numbers', 'paragraph-types', 'toolbar', 'outline',
+        'screen-reader',
     ];
 
     constructor() {
@@ -84,6 +86,7 @@ export class MarkdownEditorElement extends HTMLElement {
             showParagraphNumbers: this.hasAttribute('paragraph-numbers'),
             showParagraphTypes: this.hasAttribute('paragraph-types'),
             showOutline: this.hasAttribute('outline'),
+            screenReader: this.getAttribute('screen-reader') ?? 'auto',
         });
         this.editor.addEventListener('change', () => {
             this._internals?.setFormValue(this.editor.value);
@@ -111,6 +114,7 @@ export class MarkdownEditorElement extends HTMLElement {
         else if (name === 'paragraph-types') this.editor.showParagraphTypes = value !== null;
         else if (name === 'toolbar') this.editor.toolbarItems = toolbarOf(value);
         else if (name === 'outline') this.editor.showOutline = value !== null;
+        else if (name === 'screen-reader') this.editor.screenReader = value ?? 'auto';
     }
 
     async _load(url) {

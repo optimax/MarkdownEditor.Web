@@ -402,6 +402,29 @@ test('a read-only editor undoes and redoes nothing', async () => {
     editor.readOnly = false;
 });
 
+test('screen reader mode: auto, on and off, Shift+Alt+F1; the text area holds the formatted text', async () => {
+    const stage = document.getElementById('stage');
+    stage.replaceChildren();
+    const auto = new MarkdownEditor(stage, { markdown: 'a' });
+    equal([auto.screenReader, auto.view.screenReader], ['auto', matchMedia('(pointer: fine)').matches], 'auto');
+    auto.destroy();
+    const editor = new MarkdownEditor(stage, { markdown: '# Title\n\nSome **bold** text', screenReader: 'on' });
+    editor.select(11);
+    const input = editor.view.input;
+    equal([input.value, input.selectionStart], ['Title\nSome bold text', 8], 'on: the text as shown, the caret in it');
+    const toggle = async () => {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'F1', code: 'F1', altKey: true, shiftKey: true,
+            cancelable: true }));
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return [editor.screenReader, input.value, editor.view.status.textContent];
+    };
+    equal(await toggle(), ['off', '', 'Screen reader mode off'], 'Shift+Alt+F1: off, and said so');
+    equal(await toggle(), ['on', 'Title\nSome bold text', 'Screen reader mode on'], 'and on again');
+    editor.screenReader = 'off';
+    equal([editor.view.screenReader, input.value], [false, ''], 'off');
+    editor.destroy();
+});
+
 test('a Mac\'s Cmd with the arrows, Backspace and Delete: the ends of the line and of the document', async () => {
     const editor = makeEditor('one two\n\nthree four');
     editor.view.mac = true;

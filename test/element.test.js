@@ -19,17 +19,19 @@ test('a <template> is read as the Markdown written in it: a quote\'s ">", an "&"
 
 test('the element\'s attributes, at first and changed; its linkclick passed on to the page', async () => {
     const stage = await staged('<markdown-editor readonly theme="dark" toolbar="undo redo | strong" paragraph-numbers ' +
-        'value="[a](https://x.y)" style="height: 200px"></markdown-editor>');
+        'screen-reader="on" value="[a](https://x.y)" style="height: 200px"></markdown-editor>');
     const element = stage.querySelector('markdown-editor');
     const editor = element.editor;
-    const state = () => [editor.readOnly, editor.theme.background, editor.toolbarItems, editor.showParagraphNumbers];
-    equal(state(), [true, '#1e1f22', ['undo', 'redo', '|', 'strong'], true], 'at first');
+    const state = () => [editor.readOnly, editor.theme.background, editor.toolbarItems, editor.showParagraphNumbers,
+        editor.screenReader];
+    equal(state(), [true, '#1e1f22', ['undo', 'redo', '|', 'strong'], true, 'on'], 'at first');
     equal(element.value, '[a](https://x.y)', 'its value attribute');
     element.removeAttribute('readonly');
     element.setAttribute('theme', 'light');
     element.setAttribute('toolbar', 'false');
     element.removeAttribute('paragraph-numbers');
-    equal(state(), [false, '#ffffff', [], false], 'changed');
+    element.setAttribute('screen-reader', 'off');
+    equal(state(), [false, '#ffffff', [], false, 'off'], 'changed');
     let href = null;
     stage.addEventListener('linkclick', (event) => {
         href = event.detail.href;

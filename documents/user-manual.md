@@ -415,6 +415,13 @@ to the text, and Escape goes back without pressing anything. The toolbar is one 
 it comes back to the button last used. Since Tab is the editor's own (it indents), Escape and
 then Tab leave the editor, Escape and then Shift+Tab go back to what is before it.
 
+**With a screen reader.** In screen reader mode the editor gives a screen reader the text
+round the caret, as it is shown (without the Markdown that is hidden), so that it reads the
+character, the word or the line the caret goes over, and what is typed. The mode is on
+where there is a mouse and off on a touch screen, whose keyboard would read that text too
+and might change it. Shift+Alt+F1 switches it on or off, and the screen reader says which.
+A page sets it with the `screenReader` option (chapter 27).
+
 In a read-only document only the buttons that change the view (the marks, the numbers, the
 types, the Markdown source and the zoom) are on. In the raw Markdown view only those, Undo
 and Redo are.
@@ -1322,6 +1329,7 @@ page; the browser's own page zoom is not touched by Ctrl and the wheel over the 
 | On a Mac: Cmd+Up, Cmd+Down | The start or end of the document; with Shift, select |
 | On a Mac: Cmd+Backspace, Cmd+Delete | Delete to the start or the end of the line |
 | Alt+F10 | To the toolbar (Escape comes back) |
+| Shift+Alt+F1 | Screen reader mode on or off (chapter 8) |
 | Ctrl+Shift+R | The raw Markdown view on or off |
 | Ctrl and the mouse wheel | Zoom |
 
@@ -1361,6 +1369,7 @@ Importing it also defines the `<markdown-editor>` element (chapter 36).
 | `showParagraphNumbers` | `false` | Each paragraph's number, left of the text. |
 | `showParagraphTypes` | `false` | Each paragraph's type, left of the text. |
 | `showOutline` | `false` | Collapsible headings: the triangles beside them (chapter 24). |
+| `screenReader` | `'auto'` | Screen reader mode (chapter 8): `'on'`, `'off'`, or `'auto'`, on with a mouse and off on a touch screen. Also a property. |
 | `rawMode` | `false` | Start in the raw Markdown view. |
 | `imageBase` | the page | The URL that relative picture addresses are read from (chapter 33). |
 | `openLinks` | `true` | Ctrl+click opens a web or e-mail link in a new tab. |
@@ -1977,6 +1986,7 @@ Or a file, with `src`:
 | `paragraph-numbers` | The paragraph numbers on. |
 | `paragraph-types` | The paragraph types on. |
 | `outline` | Collapsible headings on. |
+| `screen-reader` | `auto` (the default), `on` or `off`: screen reader mode (chapter 8). |
 
 Changing an attribute (except `name` and `value`) changes the editor at once:
 
@@ -2160,6 +2170,7 @@ milliseconds. Nothing needs to be done for it.
   input methods (for Chinese, Japanese, Korean...) have not been tried, though the code for
   them is there. On a Mac, Cmd should do what Ctrl does, and Cmd with the arrows, Backspace
   and Delete what a Mac's do (chapter 26); that has been tried only by a test, not on a Mac.
+  Screen reader mode (chapter 8) has been tried by tests, not yet with a screen reader.
 - **Tables:** no commands to add or delete columns, delete rows or set alignment; use the
   raw Markdown view.
 - **Code is not colored** by its language.

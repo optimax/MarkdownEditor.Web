@@ -288,8 +288,22 @@ The browser lays the text out; the view reads the geometry back with DOM ranges.
   nothing selected makes the next key, if it is Tab or Shift+Tab, the browser's: the focus
   leaves the view (`_escaped`), which Tab with `acceptsTab` would else never let it do.
 - **A screen reader** reads the paragraphs drawn as the text they show: a hidden run (syntax)
-  is `aria-hidden`. The text area that has the focus holds nothing of the document yet
-  (TO-DO "Screen Readers and the Keyboard in the Toolbar").
+  is `aria-hidden`. In **screen reader mode** (`screenReader`, off in the view by default;
+  2026-11-11, TO-DO "Screen Readers and the Keyboard in the Toolbar", the user: "As proposed,
+  with the default `auto`") the text area that has the focus holds the text round the caret
+  as it is shown (`_mirror`, from `_syncInput`): the paragraphs from five before the caret's
+  (or the selection's first) to five after its last, a line each, hidden runs left out, a
+  line break inside a paragraph a line break; its own caret and selection where the view's
+  are (a position in hidden syntax where it would be). It is kept so at every move and edit,
+  so that a screen reader, which reads the text area, reads what the caret goes over and the
+  lines round it. A selection of more than 200 paragraphs gives the caret's paragraph, all of
+  it selected (Copy and Cut are still offered; what they take is the view's selection). An
+  input method composes in it at the caret; after it, the text is put back. Out of the mode
+  the text area holds `''`, or a selected character while something is selected. A phone's
+  keyboard reads that text too and may correct a word of it, which the view does not follow
+  (it types at its own caret): hence off unless the host turns it on (the editor's `auto`:
+  on with a fine pointer). `announce(text)` says something through a polite live region of
+  the view's (`.vtv-status`, `role="status"`).
 - **Typing** arrives as `beforeinput` (`insertText`), which the view cancels and turns into
   the `insertText` command; deleting from a phone's keyboard arrives the same way.
   `historyUndo` and `historyRedo` (the browser's Edit menu) become `undo` and `redo` events.
@@ -371,7 +385,8 @@ What a host calls:
 | `getStyleName(i)` | The name the gutter gives a paragraph (section 4.10). |
 | `copy`, `cut`, `paste`, `focus`, `destroy` | As their names say. |
 
-Properties: `readOnly`, `acceptsTab`, `mac` (a Mac's keys, section 4.8), `wordWrap`,
+Properties: `readOnly`, `acceptsTab`, `mac` (a Mac's keys, section 4.8), `screenReader`
+(section 4.7; with `announce(text)`), `wordWrap`,
 `showFormattingMarks`, `zoom` (every size
 scaled), `padding`, `leftGutterContent` and `paragraphLabels` (section 4.10),
 `styleProvider`, `editRecorder`,
@@ -1022,7 +1037,14 @@ provider from the theme and the controller from the Markdown. Options: `markdown
 `prompt`, `padding`, `label`, `onChange`, `rawMode` (start in the raw Markdown view),
 `showParagraphNumbers` (the gutter's numbers, section 4.10; off by default),
 `showParagraphTypes` (the gutter's names; off by default), `showOutline` (collapsible
-headings: the outline marks, section 4.11; off by default, the page's to offer).
+headings: the outline marks, section 4.11; off by default, the page's to offer),
+`screenReader`.
+
+- **Screen reader mode** (`screenReader`, option and property): `'on'`, `'off'` or `'auto'`,
+  the default, which is on while `matchMedia('(pointer: fine)')` matches (a mouse's pointer;
+  a touch screen's is coarse, and its keyboard would read the text area too) and follows it
+  as it changes. It sets the view's `screenReader` (section 4.7), which says whether it is
+  on. Shift+Alt+F1 switches it on or off and says so (`announce`).
 
 - **The keys** are bound in the view's `keymap`, as MaxPad's where a browser leaves them to a
   page:
@@ -1038,6 +1060,7 @@ headings: the outline marks, section 4.11; off by default, the page's to offer).
   | Ctrl+Alt+Q, C, L | quote, code block, horizontal line |
   | Ctrl+Shift+R | the raw Markdown view on or off (`toggleRawMode`) |
   | Alt+F10 | the focus to the toolbar (`focusToolbar`), as in the editors of the web |
+  | Shift+Alt+F1 | screen reader mode on or off (`screenReader`), said through `announce` |
 
   A browser gives a page Ctrl+1 to Ctrl+6 before it switches tabs with them, and switches
   none when the page takes them; Ctrl+Shift+R too, before it reloads the page (MaxPad's
@@ -1125,7 +1148,8 @@ headings: the outline marks, section 4.11; off by default, the page's to offer).
   written in it, or the document `src` loaded), as a `<textarea>` goes back to its text.
 - **Attributes:** `theme`, `toolbar` (`"false"` for none, or the names of the items wanted,
   separated by spaces or commas: `"undo redo | strong em"`), `readonly`, `image-base`, `src`,
-  `name`, `paragraph-numbers`, `paragraph-types`, `outline` (collapsible headings).
+  `name`, `paragraph-numbers`, `paragraph-types`, `outline` (collapsible headings),
+  `screen-reader` (`auto`, `on` or `off`).
 - **A form field:** it is form-associated (`ElementInternals`): a form submits its Markdown
   under its `name` (its form value set after every change), and it raises `input` and
   `change` (bubbling) after each change the user makes, and `linkclick`. As a native field's,
@@ -1150,10 +1174,10 @@ the suites; `?steps=150` makes the random test longer.
 | `incremental.test.js` | a source read again in part, after thousands of random changes (characters that make and unmake every kind of block, typed and taken away) in documents of every kind, is what a whole reading makes of it: every line, mark, block, definition and paragraph, field by field; a change reads only the blocks around it; a definition makes it read whole |
 | `projection.test.js` | blank lines, hidden and shown syntax (`⟦hidden⟧`, `⟨concealed⟩`), styles, list markers, a picture's alt (its description's plain text), and that every paragraph is its stretch of the source and every position maps to the source and back |
 | `commands.test.js` | each editing rule (Tab on bullets and numbered items among them; pipes and backslashes typed, pasted or taken out of a table cell, the row keeping its cells), the formats, the paragraph types, the links (made, their address changed, taken away) and the pictures (their description and address escaped), written with `¦` for the caret and `«...»` for a selection, as MaxPad.Editing.Tests write theirs |
-| `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits, the gutter's numbers (a table's row one, its room taken and given back) and names (outside the numbers, on their line, the host's first, a long one cut); the outline (a heading folding what it heads, the caret stepping over it, a heading replaced by its like staying collapsed, a caret put in a fold opening it); `copy()`, `cut()` and `paste()` with a clipboard that writes and one that refuses (told, nothing cut or pasted, no unhandled rejection); a right-click (the text area under the pointer, the caret put outside the selection and the selection kept inside it, the menu's Copy, the text area back at the caret) |
-| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); a Markdown heading edited and undone staying collapsed; the page's own toolbar buttons; no syntax in a read-only editor, and no undo or redo in it; Ctrl+K in a link; Tab on a numbered item; the clipboard's events (copy and cut giving Markdown, a construct with its syntax; Markdown pasted, CRLF and all, one undo step; a paste into a table cell; no cut or paste in a read-only editor, copy still); Shift+Delete with a clipboard that refuses (the page told, nothing taken out); the frame dark on a dark background however written (a short hex, rgb, hsl, oklch, a name, a page's custom property), and in an editor made out of the page; a Mac's Cmd with the arrows, Backspace and Delete; the toolbar from the keyboard (one Tab stop, the arrows, Home, End, Alt+F10, Escape) and Escape then Tab out of the text; a file dropped on the text or the toolbar refused, a page's own listener after the editor's |
+| `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits, the gutter's numbers (a table's row one, its room taken and given back) and names (outside the numbers, on their line, the host's first, a long one cut); the outline (a heading folding what it heads, the caret stepping over it, a heading replaced by its like staying collapsed, a caret put in a fold opening it); screen reader mode (the text round the caret as shown, hidden syntax left out, a line break, the caret and a backward selection in it, five paragraphs either side, off again); `copy()`, `cut()` and `paste()` with a clipboard that writes and one that refuses (told, nothing cut or pasted, no unhandled rejection); a right-click (the text area under the pointer, the caret put outside the selection and the selection kept inside it, the menu's Copy, the text area back at the caret) |
+| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); a Markdown heading edited and undone staying collapsed; the page's own toolbar buttons; no syntax in a read-only editor, and no undo or redo in it; Ctrl+K in a link; Tab on a numbered item; screen reader mode (`auto` as the pointer is, `on` holding the formatted text, Shift+Alt+F1 switching it and saying so, `off`); the clipboard's events (copy and cut giving Markdown, a construct with its syntax; Markdown pasted, CRLF and all, one undo step; a paste into a table cell; no cut or paste in a read-only editor, copy still); Shift+Delete with a clipboard that refuses (the page told, nothing taken out); the frame dark on a dark background however written (a short hex, rgb, hsl, oklch, a name, a page's custom property), and in an editor made out of the page; a Mac's Cmd with the arrows, Backspace and Delete; the toolbar from the keyboard (one Tab stop, the arrows, Home, End, Alt+F10, Escape) and Escape then Tab out of the text; a file dropped on the text or the toolbar refused, a page's own listener after the editor's |
 | `raw.test.js` | the raw view's paragraphs and its map to the source (every offset there and back); looking that changes nothing; text changed in it as one undo step; no formats in it; the paragraph numbers and types of the two views agreeing, a line's type following its text |
-| `element.test.js` | `<markdown-editor>`: the Markdown in a `<template>` read as written (a quote's `>`, an `&`, its HTML); its attributes at first and changed (`readonly`, `theme`, `toolbar`, `paragraph-numbers`, `value`), `linkclick` passed on and cancelled by the page; `input` and `change` for the user's changes only (not a script's value, a reset, a `src` file), the form value after each; a form's reset bringing back the Markdown each element was given, and the form sending it |
+| `element.test.js` | `<markdown-editor>`: the Markdown in a `<template>` read as written (a quote's `>`, an `&`, its HTML); its attributes at first and changed (`readonly`, `theme`, `toolbar`, `paragraph-numbers`, `screen-reader`, `value`), `linkclick` passed on and cancelled by the page; `input` and `change` for the user's changes only (not a script's value, a reset, a `src` file), the form value after each; a form's reset bringing back the Markdown each element was given, and the form sending it |
 
 After every command `editor.test.js` checks what MaxPad.Editing.Tests check: the view's
 paragraphs are those of a fresh projection of the source (text, style and runs), and only the

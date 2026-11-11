@@ -93,6 +93,7 @@ of one). The options, all optional:
 | `showParagraphNumbers` | Each paragraph's number in a gutter left of the text. |
 | `showParagraphTypes` | Each paragraph's type (Heading 1, Bullet, Code...) in the gutter. |
 | `showOutline` | Collapsible headings: triangles beside them fold what they head (off). |
+| `screenReader` | `'auto'` (on with a mouse, off on a touch screen), `'on'` or `'off'`: the text at the caret given to a screen reader. |
 
 What a page reads and calls:
 
@@ -203,6 +204,7 @@ The document is centered in the editor and at most 720 px wide (at 100%): the pa
 | Ctrl+Z, Ctrl+Y | Undo, redo |
 | Ctrl+Shift+R | The raw Markdown view on or off |
 | Alt+F10 | To the toolbar: Left and Right in it, Escape back |
+| Shift+Alt+F1 | Screen reader mode on or off |
 | Escape, then Tab | Out of the editor (Tab alone indents) |
 | Ctrl and the mouse wheel | Zoom (about 2% a notch) |
 

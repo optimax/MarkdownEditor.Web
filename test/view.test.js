@@ -153,6 +153,30 @@ test('positions, text and selection', () => {
     equal(view.caret, pos(1, 3), 'clamped to the document');
 });
 
+test('screen reader mode: the text area holds the text round the caret as shown, its selection the view\'s', () => {
+    const lineBreak = String.fromCharCode(0x2028);
+    const { view } = makeView([
+        'first',
+        { runs: [{ text: '**', hidden: true }, { text: 'bold' }, { text: '**', hidden: true }, { text: ' end' }] },
+        { runs: [{ text: 'a' + lineBreak + 'b' }] },
+    ]);
+    view.setCaret(pos(1, 4));
+    equal(view.input.value, '', 'off: nothing');
+    view.screenReader = true;
+    const range = () => [view.input.selectionStart, view.input.selectionEnd, view.input.selectionDirection];
+    equal(view.input.value, 'first\nbold end\na\nb', 'the paragraphs as shown, syntax left out');
+    equal(range(), [8, 8, 'forward'], 'the caret');
+    view.select(pos(2, 3), pos(1, 1));
+    equal(range(), [6, 18, 'backward'], 'the selection, a position in hidden syntax where it would be');
+    view.screenReader = false;
+    equal(view.input.value, ' ', 'off again: a selected character for Copy');
+    const many = makeView(Array.from({ length: 20 }, (_, i) => 'p' + i)).view;
+    many.screenReader = true;
+    many.setCaret(pos(10, 1));
+    equal(many.input.value, 'p5\np6\np7\np8\np9\np10\np11\np12\np13\np14\np15', 'five paragraphs either side');
+    equal([many.input.selectionStart, many.input.selectionEnd], [16, 16], 'the caret in p10');
+});
+
 test('copy(), cut() and paste(): a clipboard that refuses is told, and a refused cut takes nothing out', async () => {
     const { view } = makeView(['Hello world']);
     let told = 0, unhandled = 0, written = null;

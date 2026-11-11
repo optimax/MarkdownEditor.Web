@@ -26,6 +26,7 @@ import {
 } from './text.js';
 
 const BUFFER = 600; // (pixels laid out above and below the viewport)
+const MIRROR_AROUND = 5, MIRROR_LIMIT = 200; // (screen reader mode: the paragraphs round the caret; a selection's most)
 const ZWSP = '\u200B';
 const BREAKS = /(\u2028)/; // (a run cut at its line breaks, each break kept as a piece of its own)
 
@@ -76,6 +77,7 @@ const CSS = `
 .vtv-caret.vtv-blink { animation: vtv-blink 1.06s steps(1) infinite; }
 @keyframes vtv-blink { 50% { visibility: hidden; } }
 .vtv-composition { position: absolute; white-space: pre; text-decoration: underline; background: inherit; }
+.vtv-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .vtv-input { position: absolute; width: 1px; height: 1em; padding: 0; border: 0; margin: 0; opacity: 0; resize: none;
   overflow: hidden; white-space: pre; pointer-events: none; font-size: 16px; caret-color: transparent; }
 `;
@@ -125,7 +127,7 @@ export class VirtualTextView extends EventTarget {
     /**
      * @param {HTMLElement} host The element the view fills (give it a height).
      * @param {object} [options] { styleProvider, editRecorder, readOnly, acceptsTab, padding, wordWrap,
-     *   showFormattingMarks, paragraphs, clipboard }
+     *   showFormattingMarks, paragraphs, clipboard, screenReader }
      */
     constructor(host, options = {}) {
         super();
@@ -152,6 +154,9 @@ export class VirtualTextView extends EventTarget {
         this.page.append(this.underlay, this.gutter, this.content, this.overlay);
         this.overlay.append(this.caretElement, this.composition);
         this.page.append(this.input);
+        this.status = el('div', 'vtv-status'); // (what is said to a screen reader: `announce`)
+        this.status.setAttribute('role', 'status');
+        this.host.append(this.status);
         this.scroller.append(this.page);
         host.append(this.scroller);
 
@@ -190,6 +195,7 @@ export class VirtualTextView extends EventTarget {
         this._wordWrap = options.wordWrap !== false;
         this._showFormattingMarks = !!options.showFormattingMarks;
         this._leftGutterContent = options.leftGutterContent ?? GutterContent.None;
+        this._screenReader = !!options.screenReader;
         this._gutterLabels = [];
         this._gutterNames = [];
         this._gutterMarks = [];
@@ -209,6 +215,7 @@ export class VirtualTextView extends EventTarget {
     /** Takes the view out of its host and lets go of what it listens to. */
     destroy() {
         clearTimeout(this._menuTimer);
+        clearTimeout(this._announceTimer);
         this._resizeObserver.disconnect();
         this._unwire?.();
         this.scroller.remove();
@@ -2050,12 +2057,73 @@ export class VirtualTextView extends EventTarget {
         });
     }
 
-    // What the hidden input holds: with a selection, something selected, so that the browser offers Copy and Cut.
+    // What the hidden input holds: with a selection, something selected, so that the browser offers Copy and Cut; in
+    // screen reader mode, the text round the caret (`_mirror`).
     _syncInput() {
         if (this._composing) return;
+        if (this._screenReader && this.caret) return this._mirror();
         const value = this.selection ? '\u00A0' : '';
         if (this.input.value !== value) this.input.value = value;
         if (value) this.input.select();
+    }
+
+    /**
+     * Screen reader mode: the text area that has the focus holds the text round the caret as it is shown -- the
+     * paragraphs from MIRROR_AROUND before the caret's (or the selection's first) to as many after its last, each a line
+     * of it, the syntax that is hidden left out, a line break inside a paragraph a line break -- with its own caret and
+     * selection where the view's are, kept so at every move and edit (`_syncInput`): a screen reader reads the text area,
+     * so it reads what the caret goes over, and the lines round it. Off by default; a host turns it on where a screen
+     * reader may be (MarkdownEditor's `screenReader`). A phone's keyboard reads that text too, and may correct a word of
+     * it, which the view does not follow (it types at its own caret): hence not on everywhere.
+     */
+    get screenReader() {
+        return this._screenReader;
+    }
+
+    set screenReader(on) {
+        this._screenReader = !!on;
+        if (!this._composing) this.input.value = '';
+        this._syncInput();
+    }
+
+    /** Says `text` to a screen reader (a polite live region of the view's), what a change of a mode is, say. */
+    announce(text) {
+        this.status.textContent = ''; // (emptied, then filled a moment later: the same words said again are said)
+        clearTimeout(this._announceTimer);
+        this._announceTimer = setTimeout(() => (this.status.textContent = text), 50);
+    }
+
+    _mirror() {
+        const input = this.input;
+        const caret = this.caret, anchor = this.anchor ?? caret;
+        let first = Math.min(caret.paragraph, anchor.paragraph), last = Math.max(caret.paragraph, anchor.paragraph);
+        const whole = last - first <= MIRROR_LIMIT; // (a selection too long to hold: the caret's paragraph, all selected)
+        if (!whole) first = last = caret.paragraph;
+        first = Math.max(0, first - MIRROR_AROUND);
+        last = Math.min(this.paragraphs.length - 1, last + MIRROR_AROUND);
+        let text = '';
+        const starts = [];
+        for (let p = first; p <= last; p++) {
+            if (p > first) text += '\n';
+            starts.push(text.length);
+            for (const run of this.paragraphs[p].runs) if (!run.hidden) text += run.text.replaceAll(SOFT_BREAK, '\n');
+        }
+        // (a position of the view as an offset in that text: in hidden syntax, where it would be)
+        const offsetOf = (position) => {
+            const p = Math.max(first, Math.min(last, position.paragraph));
+            let at = 0, offset = starts[p - first];
+            for (const run of this.paragraphs[p].runs) {
+                const length = run.text.length;
+                if (position.index <= at + length) return offset + (run.hidden ? 0 : position.index - at);
+                at += length;
+                if (!run.hidden) offset += length;
+            }
+            return offset;
+        };
+        if (input.value !== text) input.value = text;
+        let a = offsetOf(anchor), c = offsetOf(caret);
+        if (!whole) [a, c] = [starts[caret.paragraph - first], offsetOf(pos(caret.paragraph, Infinity))];
+        input.setSelectionRange(Math.min(a, c), Math.max(a, c), c < a ? 'backward' : 'forward');
     }
 
     _onKeyDown(e) {
@@ -2201,6 +2269,7 @@ export class VirtualTextView extends EventTarget {
         this.input.value = '';
         if (e.data) this._command('insertText', e.data);
         else this._drawOverlay();
+        this._syncInput(); // (what the text area holds again: in screen reader mode, the text round the caret)
     }
 
     _copyText() {

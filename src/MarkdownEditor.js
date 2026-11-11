@@ -117,7 +117,7 @@ export class MarkdownEditor extends EventTarget {
      *   address; window.prompt by default), rawMode (start in the raw Markdown view), showParagraphNumbers (each
      *   paragraph's number in a gutter left of the text), showParagraphTypes (each paragraph's type there),
      *   showOutline (headings that can be collapsed: the marks beside them there that fold what they head; false by
-     *   default, the page's to offer) }
+     *   default, the page's to offer), screenReader ('auto', the default, 'on' or 'off': `screenReader`) }
      */
     constructor(target, options = {}) {
         super();
@@ -150,6 +150,11 @@ export class MarkdownEditor extends EventTarget {
             revealUnfocused: this.options.revealUnfocused === true,
         });
         this.raw = new RawMode(this.view, this.controller, new RawStyleProvider(this.styles));
+        // (screen reader mode, 'auto': on while the main pointer is a fine one, a mouse's, and so as that changes)
+        this._finePointer = typeof matchMedia === 'function' ? matchMedia('(pointer: fine)') : null;
+        this._onPointerChange = () => this._applyScreenReader();
+        this._finePointer?.addEventListener?.('change', this._onPointerChange);
+        this.screenReader = this.options.screenReader ?? 'auto';
         this._rawChanges = 0; // (the edits made in the raw view, which `version` counts as well)
         this._applyThemeColors();
         this._buildToolbar();
@@ -414,8 +419,30 @@ export class MarkdownEditor extends EventTarget {
         this.view.focus();
     }
 
+    /**
+     * Screen reader mode: 'on', 'off', or 'auto' (the default), on where the main pointer is a mouse's and off on a touch
+     * screen. On, the text area that has the focus holds the text round the caret, as it is shown, its own caret and
+     * selection where the editor's are, so that a screen reader reads what the caret goes over and the lines round it
+     * (the view's `screenReader`, which says whether it is on). Off on a touch screen because a phone's keyboard reads
+     * that text too, and may correct a word of it, which the editor does not follow. Shift+Alt+F1 switches it.
+     */
+    get screenReader() {
+        return this._screenReader;
+    }
+
+    set screenReader(value) {
+        this._screenReader = value === 'on' || value === true ? 'on' : value === 'off' || value === false ? 'off' : 'auto';
+        this._applyScreenReader();
+    }
+
+    _applyScreenReader() {
+        const setting = this._screenReader;
+        this.view.screenReader = setting === 'on' || (setting === 'auto' && (this._finePointer?.matches ?? true));
+    }
+
     /** Takes the editor out of the page. */
     destroy() {
+        this._finePointer?.removeEventListener?.('change', this._onPointerChange);
         this.view.destroy();
         this.root.remove();
     }
@@ -596,6 +623,10 @@ export class MarkdownEditor extends EventTarget {
         keys.set('Ctrl+Alt+C', run(() => this.setBlockType('code')));
         keys.set('Ctrl+Alt+L', run(() => this.insertRule()));
         keys.set('Alt+F10', run(() => this.focusToolbar())); // (the toolbar's key in editors of the web)
+        keys.set('Alt+Shift+F1', run(() => {
+            this.screenReader = this.view.screenReader ? 'off' : 'on';
+            this.view.announce(this.view.screenReader ? 'Screen reader mode on' : 'Screen reader mode off');
+        }));
         // (the zoom has no keys, as MaxPad's: Ctrl and the mouse wheel zoom, about 2% a notch)
         this.view.scroller.addEventListener('wheel', (event) => {
             if (!event.ctrlKey) return;
