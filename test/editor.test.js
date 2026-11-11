@@ -428,6 +428,38 @@ test('a Mac\'s Cmd with the arrows, Backspace and Delete: the ends of the line a
     equal(editor.value, 'a', 'not on a Mac: a Backspace');
 });
 
+test('the clipboard\'s events: copy and cut give Markdown, paste reads it; in a table cell, read-only', async () => {
+    const original = 'Some **bold** text\n\n| a | b |\n| --- | --- |\n| 1 | 2 |';
+    const editor = makeEditor(original);
+    const clip = (type, text = null) => {
+        const data = new DataTransfer();
+        if (text !== null) data.setData('text/plain', text);
+        editor.view.input.dispatchEvent(new ClipboardEvent(type, { clipboardData: data, bubbles: true, cancelable: true }));
+        return data.getData('text/plain');
+    };
+    editor.select(7, 11);
+    equal(clip('copy'), '**bold**', 'copy: the word in **bold** taken with its syntax');
+    equal([clip('cut'), editor.value.split('\n')[0]], ['**bold**', 'Some  text'], 'cut');
+    editor.undo();
+    editor.select(18);
+    clip('paste', '\r\n\r\n## Pasted\r\n\r\n- item');
+    equal(editor.value.split('\n\n').slice(0, 3), ['Some **bold** text', '## Pasted', '- item'], 'pasted Markdown');
+    checkView(editor);
+    editor.undo();
+    equal(editor.value, original, 'a paste undone in one step');
+    editor.select(original.indexOf('| 1 |') + 3);
+    clip('paste', 'x|y\nz');
+    equal(editor.value.split('\n')[4], '| 1x\\|y z | 2 |', 'in a cell: a line break a space, a pipe text');
+    editor.undo();
+    editor.readOnly = true;
+    editor.select(7, 11);
+    equal(clip('copy'), '**bold**', 'read-only: copy');
+    clip('cut');
+    clip('paste', 'nope');
+    equal(editor.value, original, 'read-only: no cut, no paste');
+    editor.readOnly = false;
+});
+
 test('Shift+Delete with a clipboard that refuses: the page is told, and nothing is taken out', async () => {
     const editor = makeEditor('one two');
     let told = 0;

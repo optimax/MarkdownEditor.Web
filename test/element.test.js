@@ -17,6 +17,36 @@ test('a <template> is read as the Markdown written in it: a quote\'s ">", an "&"
     equal(stage.querySelector('markdown-editor').value, '> A quote\n\nR&D, a < b, <kbd>Ctrl</kbd><br> <!-- a note -->');
 });
 
+test('the element\'s attributes, at first and changed; its linkclick passed on to the page', async () => {
+    const stage = await staged('<markdown-editor readonly theme="dark" toolbar="undo redo | strong" paragraph-numbers ' +
+        'value="[a](https://x.y)" style="height: 200px"></markdown-editor>');
+    const element = stage.querySelector('markdown-editor');
+    const editor = element.editor;
+    const state = () => [editor.readOnly, editor.theme.background, editor.toolbarItems, editor.showParagraphNumbers];
+    equal(state(), [true, '#1e1f22', ['undo', 'redo', '|', 'strong'], true], 'at first');
+    equal(element.value, '[a](https://x.y)', 'its value attribute');
+    element.removeAttribute('readonly');
+    element.setAttribute('theme', 'light');
+    element.setAttribute('toolbar', 'false');
+    element.removeAttribute('paragraph-numbers');
+    equal(state(), [false, '#ffffff', [], false], 'changed');
+    let href = null;
+    stage.addEventListener('linkclick', (event) => {
+        href = event.detail.href;
+        event.preventDefault();
+    }, { once: true });
+    const opened = [], open = window.open;
+    window.open = (...args) => opened.push(args);
+    try {
+        const link = { target: 'https://x.y', title: null };
+        editor.view.dispatchEvent(new CustomEvent('hyperlinkclick', { detail: { link } }));
+    } finally {
+        window.open = open;
+    }
+    equal([href, opened.length], ['https://x.y', 0], 'the page took the link: nothing opened');
+    stage.replaceChildren();
+});
+
 test('input and change follow the user\'s changes only, as a <textarea>\'s: not a script\'s, a reset, a src file', async () => {
     const stage = await staged('<form><markdown-editor name="body" style="height: 200px"></markdown-editor></form>');
     const form = stage.querySelector('form'), element = form.querySelector('markdown-editor');
