@@ -62,5 +62,98 @@ Ctrl+Scroll Wheel changes the zoom like in MaxPad (nice!) but there are no corre
 
 When the document is narrower than the editor, it currently is centered (via `margin: 0 auto` on the `vtv-page`  element). Presumably, when styling inside the editor (above) is accomplished, it will be possible to change the margin of the page via the stylesheet.
 
+<!-- The tasks below are the findings of the review of 2026-11-11 that were not fixed with it
+(the four bugs it fixed are on the branch claude/review-fixes). Highest priority first. -->
+
+## Dropping a File Leaves the Page
+
+Nothing handles `dragover` or `drop` (the comment at `VirtualTextView.js` `_onBeforeInput`
+says the clipboard events handle `insertFromDrop`, but there is no drop handler). A file
+dropped onto the editor is opened by the browser in place of the page, and unsaved work is
+lost. At least cancel the browser's own handling of a drop on the editor; dropping text and
+pictures in is the separate, larger feature listed as not done.
+
+## Backspace or Delete Before a Cell's Pipe Breaks the Table
+
+In `|x\\|y|` (the cell shows `x\`), Backspace after the `\` leaves `|x\|y|`: the backslash
+left escapes the cell's own pipe, the header row has one cell fewer than the delimiter row,
+and the whole table becomes a paragraph. Typing and pasting into a cell keep the cell's pipes
+now (`cellText` in `commands.js`); taking text out of a cell (`backspace`, `deleteForward`,
+`deleteSelection`, a cut) needs the same care: a backslash left in front of the cell's pipe
+must not escape it.
+
+## Cut, Copy and Paste on Right-Click
+
+A right-click shows the browser's menu for the page, with no Cut, Copy or Paste: the hidden
+text area that has the keyboard takes no pointer events (`.vtv-input`), and the view draws its
+own selection, so the browser has nothing to cut or copy. Editors usually move their hidden
+text area under the pointer on `contextmenu`, holding the selected text.
+
+## Screen Readers and the Keyboard in the Toolbar
+
+A screen reader reads nothing of the document: the focused text area holds only `''` or a
+non-breaking space (`_syncInput`), and the paragraphs drawn are not tied to it. The text at
+and around the caret, and its changes, should reach assistive technology. The toolbar
+(`role="toolbar"`) makes each of its about 28 buttons a Tab stop; a toolbar is one Tab stop
+with the arrow keys moving between its buttons.
+
+## Mac Keys
+
+On a Mac, Cmd+Left and Cmd+Right go to the start and end of the line, Cmd+Up and Cmd+Down to
+the start and end of the document, and Cmd+Backspace takes out the line before the caret.
+None of these is handled: `_onKeyDown` in `VirtualTextView.js` moves by a character for
+Cmd+Arrow, and Cmd+Backspace takes out one character.
+
+## Clipboard Failures Not Told
+
+`_writeClipboard` in `VirtualTextView.js` wraps `navigator.clipboard.writeText` in a
+`try/catch`, but it returns a promise: a refusal is an unhandled rejection, and
+`clipboardunavailable` is never raised. (`paste()` awaits `readText` inside its `try`, so a
+refused read is caught there.)
+
+## The Element's Events When a Script Sets Its Value
+
+`<markdown-editor>` raises `input` and `change` when a script sets its `value` (and on a
+form's reset), as the editor's `change` does. A native field raises neither when a script
+sets its value; a page that saves on `change` saves what it has just loaded. Decide whether
+the element should follow the native fields.
+
+## Emphasis Parsing Slows Down on Long Paragraphs
+
+`processEmphasis` in `inlines.js` looks back over every opener for each closer: in one
+paragraph of `*a_ ` repeated, 6 ms at 2,000 times, 21 ms at 4,000, 72 ms at 8,000 (each
+doubling three to four times as slow). commonmark.js keeps an "openers bottom" per delimiter
+kind so that a search is never done twice. Only very long pasted paragraphs are hit.
+
+## Dark Toolbar for Any Way of Writing a Color
+
+`isDark` in `MarkdownEditor.js` understands only `#rrggbb`: a theme object whose background
+is `#111`, `rgb(...)` or a color name gets the light toolbar and frame.
+
+## A Picture's Description Shown With Its Escapes
+
+The projection gives a picture's `alt` as its source between the brackets
+(`projection.js`, `Builder.inline`, `image`): `![a \] b](x)` has the alt `a \] b`, and
+`![**b**](x)` has `**b**`. The alt (and the box drawn for a picture that cannot be loaded)
+should be the description's plain text, its escapes taken off.
+
+## Tests for Paste and the Clipboard
+
+No test covers pasting, copying or cutting (the clipboard events, `copiedText`, a paste into
+a cell), nor `<markdown-editor>` beyond its `<template>` and a form's reset
+(`test/element.test.js`).
+
+## The Development Server's Folder Check
+
+`tools/serve.ps1` serves a path if it starts with the project's folder, so
+`/../MarkdownEditor.Web2/...` would be served from a sibling folder of that name. It serves
+only this machine; check against the folder with a path separator after it.
+
+## AGENTS.md and the Other Files Copied From MarkdownTools
+
+`AGENTS.md`, `.gitignore` and `TO-DO-INSTRUCTIONS.md` are MarkdownTools' (WPF, .NET, xUnit,
+`publish-locally.bat`, building in Release after each task). Which of their rules hold here
+is the user's decision (`handoff.md`): say which, and they are adapted.
+
 # END-OF-TO-DO
 
