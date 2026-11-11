@@ -1082,7 +1082,9 @@ of each line.
 | Enter | a new row under the caret's row (under the heading row, from a heading), the caret in its first cell |
 | Up, Down | to the cell above or below |
 
-- A `|` typed in a cell is written `\|`, so that it is text and not the edge of a cell.
+- A `|` typed or pasted in a cell is written `\|`, so that it is text and not the edge of a
+  cell (each of `||` too). A `\` typed right before the cell's edge is written `\\`, so that
+  it shows as `\` and the edge stays.
 - A cell is one line: a line break typed or pasted into it becomes a space.
 - Spaces typed at the end of a cell show while the caret is after them.
 
@@ -1429,7 +1431,7 @@ document or in the raw Markdown view.
 | `insertRule()` | A horizontal line after the paragraph. |
 | `insertCodeBlock(language)` | An empty block of code after the paragraph, with its language; with a selection, the selected paragraphs in a block. |
 | `insertLink(address, title)` | The selection made a link to `address` (with a title, if given); in a link, its address changed instead, and an empty address takes the link away (chapter 17.2). |
-| `insertImage(address, description)` | A picture at the caret. |
+| `insertImage(address, description)` | A picture at the caret. The description is text (a `]` in it is written `\]`), and an address with a space, a parenthesis or an angle bracket is written in angle brackets, as a link's is. |
 | `promptLink()`, `promptImage()` | Ask for the address (chapter 32), then as above. |
 | `undo()`, `redo()` | A step back or forward. `canUndo` and `canRedo` say whether there is one. |
 | `toggleRawMode()` | The raw Markdown view on or off (also the `rawMode` property). |
@@ -1919,6 +1921,11 @@ The first of these that it has:
 Of what is inside it, the first and last blank lines are taken off, and the indentation its
 lines share.
 
+A `<script type="text/markdown">` keeps the Markdown exactly as written. A `<template>` is
+read by the page's HTML parser first: its text comes back as written (`>`, `&`, `<` and the
+HTML in it), but an entity such as `&lt;` comes back as `<`, and an autolink such as
+`<https://example.com>` is taken for an HTML tag.
+
 ```html
 <markdown-editor style="height: 240px">
   <script type="text/markdown">
@@ -1980,7 +1987,8 @@ element.editor.toolbarItems = [...DEFAULT_TOOLBAR, '|', 'outline'];
 ```
 
 In a form, it is submitted under its `name` with its Markdown, as a `<textarea>` is; a reset
-of the form empties it.
+of the form brings back the Markdown it started with (its `value` attribute, what is written
+in it, or its `src` file), as a `<textarea>` goes back to its text.
 
 ```html
 <form id="post">

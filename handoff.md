@@ -75,6 +75,17 @@ at one offset were applied in the wrong order); Ctrl+K in a link nested a new li
 `blocks.insertLink`, `linkAt`); Ctrl+Z, Ctrl+Y and the browser's Edit menu undid in a
 read-only editor. See the document's sections 7.4 and 11.
 
+A review of the project (2026-11-11, the user: "Fix the four confirmed bugs on a claude/
+branch here AND add all your other findings as tasks in TO-DO.md"), on the branch
+`claude/review-fixes`: a `<template>` in `<markdown-editor>` was read by its `innerHTML`, a
+quote's `>` coming back as `&gt;` (now `templateText`, node by node); a form's reset emptied
+the element (now the Markdown it was given); `a||b` pasted into a table cell left the second
+pipe bare, a cell more in its row (now `cellText`: every pipe not escaped already, and a
+backslash typed before the cell's own pipe doubled); `insertImage` wrote a `]` of the
+description and an address's `<` and `>` as they were (now escaped, the address written as
+a link's: `writtenDestination`). `test/element.test.js` is new. The review's other findings
+are tasks in `TO-DO.md`. See the document's sections 7.2, 7.4, 12 and 13.
+
 ## Design decisions
 
 The decisions are in `documents/implementation.md`; the ones a new session needs first:
@@ -94,8 +105,8 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Verification
 
-- `test/index.html`: 70 passed, 0 failed (Chrome, in the Claude desktop app's browser,
-  2026-11-04). `?steps=150` ran the random test clean as well.
+- `test/index.html`: 74 passed, 0 failed (Chrome, in the Claude desktop app's browser,
+  2026-11-11). `?steps=150` ran the random test clean as well.
 - Tried by hand in the browser: typing, the syntax at the caret, Enter in a list and a
   quote, a task's box clicked, a word double-clicked and made bold from the toolbar, the
   code fences shown together, copy, cut and paste, the dark theme, the element in a form,
@@ -113,8 +124,9 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Next steps
 
-1. Firefox and Safari, mobile keyboards and input methods, tried by hand.
-2. Table commands, code highlighting, find and replace; the raw view's own stylesheet
+1. The review's tasks in `TO-DO.md`, when the user says so.
+2. Firefox and Safari, mobile keyboards and input methods, tried by hand.
+3. Table commands, code highlighting, find and replace; the raw view's own stylesheet
    (MaxPad's).
-3. Adapt `AGENTS.md`, now a copy of MarkdownTools' (WPF and .NET rules), to this project:
+4. Adapt `AGENTS.md`, now a copy of MarkdownTools' (WPF and .NET rules), to this project:
    the user's decision.

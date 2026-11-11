@@ -20,12 +20,33 @@ import { MarkdownEditor } from './MarkdownEditor.js';
 // The Markdown written inside the element, with the indentation its lines share taken off.
 function initialMarkdown(element) {
     const source = element.querySelector('script[type="text/markdown"], template');
-    let text = source ? (source instanceof HTMLTemplateElement ? source.innerHTML : source.textContent) : element.textContent;
+    let text = source ? (source instanceof HTMLTemplateElement ? templateText(source.content) : source.textContent)
+        : element.textContent;
     text = text.replace(/^\s*\n/, '').replace(/\n\s*$/, '');
     const indents = text.split('\n').filter((line) => line.trim()).map((line) => /^[ \t]*/.exec(line)[0].length);
     const common = indents.length ? Math.min(...indents) : 0;
     if (!common) return text;
     return text.split('\n').map((line) => line.slice(Math.min(common, /^[ \t]*/.exec(line)[0].length))).join('\n');
+}
+
+// What a <template> holds, as the Markdown written in it: its text as text (a quote's ">" and an "&" as they are, where
+// `innerHTML` gives "&gt;" and "&amp;"), and the elements the page's parser made of the HTML in it written as HTML.
+function templateText(node) {
+    let text = '';
+    for (const child of node.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) {
+            text += child.data;
+        } else if (child.nodeType === Node.COMMENT_NODE) {
+            text += `<!--${child.data}-->`;
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+            const html = child.cloneNode(false).outerHTML; // (its start tag, and its end tag unless it is a void one)
+            const end = `</${child.localName}>`;
+            const closed = html.endsWith(end);
+            const inner = child instanceof HTMLTemplateElement ? child.content : child;
+            text += (closed ? html.slice(0, -end.length) : html) + templateText(inner) + (closed ? end : '');
+        }
+    }
+    return text;
 }
 
 // The toolbar an attribute asks for: all of it (none given, or "true"), none ("false"), or the items it names.
@@ -51,6 +72,7 @@ export class MarkdownEditorElement extends HTMLElement {
         if (this.editor) return;
         if (!this.style.display) this.style.display = 'block';
         const markdown = this.hasAttribute('value') ? this.getAttribute('value') : initialMarkdown(this);
+        this._defaultValue = markdown; // (what a form's reset brings back)
         this.replaceChildren();
         this.editor = new MarkdownEditor(this, {
             markdown,
@@ -91,7 +113,9 @@ export class MarkdownEditorElement extends HTMLElement {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`markdown-editor: could not load ${url} (${response.status})`);
         if (!this.hasAttribute('image-base')) this.editor.imageBase = new URL(url, location.href).href;
-        this.value = await response.text();
+        const markdown = await response.text();
+        this._defaultValue = markdown; // (the document the element was given: a form's reset brings it back)
+        this.value = markdown;
     }
 
     get value() {
@@ -119,8 +143,10 @@ export class MarkdownEditorElement extends HTMLElement {
         this.editor?.focus();
     }
 
+    // A form's reset: the Markdown the element was given (written in it, its `value` attribute, or its `src` document)
+    // comes back, as a <textarea> goes back to the text written in it.
     formResetCallback() {
-        this.value = '';
+        this.value = this._defaultValue ?? '';
     }
 }
 

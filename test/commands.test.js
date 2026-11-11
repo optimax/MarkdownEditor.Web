@@ -4,7 +4,9 @@ import { test, equal } from './harness.js';
 import { MarkdownState } from '../src/markdown/state.js';
 import * as commands from '../src/markdown/commands.js';
 import { toggleInline, isInline } from '../src/markdown/formatting.js';
-import { setBlockType, setHeadingLevel, stepHeadingLevel, insertTable, insertLink } from '../src/markdown/blocks.js';
+import {
+    setBlockType, setHeadingLevel, stepHeadingLevel, insertTable, insertLink, insertImage,
+} from '../src/markdown/blocks.js';
 
 function parse(marked) {
     let source = '', anchor = null, caret = null;
@@ -114,6 +116,29 @@ test('typing on an empty paragraph keeps the blank line after it', () => {
     check((state, selection) => commands.insertText(state, selection, 'x'), 'a\n\n¦\nb', 'a\n\nx¦\n\nb');
     const typePipe = (state, selection) => commands.insertText(state, selection, 'x|y');
     check(typePipe, '| a |\n|---|\n| ¦ |', '| a |\n|---|\n| x\\|y¦ |');
+});
+
+test('pipes typed or pasted into a table cell are text, and the cell\'s own pipes stay the cell\'s', () => {
+    const typed = (text) => (state, selection) => commands.insertText(state, selection, text);
+    check(typed('a||b'), '| x¦ | y |\n| --- | --- |', '| xa\\|\\|b¦ | y |\n| --- | --- |');
+    check(typed('a\\|b'), '| ¦ |\n| --- |', '| a\\|b¦ |\n| --- |'); // (escaped already)
+    check(typed('a\\\\|b'), '| ¦ |\n| --- |', '| a\\\\\\|b¦ |\n| --- |'); // (a backslash, then a pipe)
+    check(typed('|'), '| x\\¦ |\n| --- |', '| x\\|¦ |\n| --- |'); // (the source's backslash escapes it)
+    check(typed('\\'), '|x¦|y|\n|-|-|', '|x\\\\¦|y|\n|-|-|'); // (the cell's pipe after it kept)
+    const { source, selection } = parse('| x¦ | y |\n| --- | --- |');
+    const pasted = new MarkdownState(commands.insertText(new MarkdownState(source), selection, 'a||b|').source);
+    equal(pasted.doc.leaves[0].rows[0].cells.length, 2, 'the row\'s cells');
+});
+
+test('a picture: its description\'s brackets and backslashes escaped, its address written as a link\'s', () => {
+    const image = (address, description) => (state, selection) => insertImage(state, selection, address, description);
+    check(image('pic.png', 'a cat'), 'x¦', 'x![a cat](pic.png)¦');
+    check(image('my pic<1>.png', 'a ] b'), 'x¦', 'x![a \\] b](<my pic%3C1%3E.png>)¦');
+    check(image('p.png', 'C:\\'), '¦', '![C:\\\\](p.png)¦');
+    const written = insertImage(new MarkdownState('x'), { anchor: 1, caret: 1 }, 'my pic<1>.png', '[a] ] b');
+    const inlines = new MarkdownState(written.source).doc.leaves[0].inlines;
+    equal(inlines.map((node) => node.type), ['text', 'image']);
+    equal(inlines[1].destination, 'my pic%3C1%3E.png');
 });
 
 test('copying takes the syntax of what it takes whole', () => {

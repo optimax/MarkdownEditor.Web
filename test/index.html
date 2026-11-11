@@ -17,7 +17,7 @@
 <script type="module">
   import { run } from './harness.js';
   const suites = new URLSearchParams(location.search).get('suites');
-  const all = ['parser', 'projection', 'incremental', 'commands', 'view', 'editor', 'raw'];
+  const all = ['parser', 'projection', 'incremental', 'commands', 'view', 'editor', 'raw', 'element'];
   for (const name of suites ? suites.split(',') : all) {
     try {
       await import(`./${name}.test.js`);

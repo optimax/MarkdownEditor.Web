@@ -104,8 +104,8 @@ export function insertText(state, selection, text) {
     text = text.replace(/\r\n?/g, '\n');
     const paragraph = state.paragraphAt(a);
     if (paragraph?.kind === 'cell') {
-        // (a table cell is one line, and a pipe in it is text)
-        text = text.replace(/\n/g, ' ').replace(/(^|[^\\])\|/g, '$1\\|');
+        // (a table cell is one line, and a pipe in it is text: the cell's own pipes stay the cell's)
+        text = cellText(text.replace(/\n/g, ' '), backslashesBefore(state.source, a), state.source[b] === '|');
     }
     if (a === b && paragraph?.kind === 'blank' && /\S/.test(text) && paragraph.lastLine + 1 < state.lines.length) {
         // (text typed on an empty paragraph is a block of its own: the blank line after it is kept)
@@ -115,6 +115,28 @@ export function insertText(state, selection, text) {
     }
     return result(state.replaced(a, b, text), a + text.length);
 }
+
+/**
+ * Text put into a table cell, whose pipes are all text: each pipe of it escaped that is not escaped already -- after an
+ * odd number of backslashes, `before` of them the source's in front of it -- ("a||b" is "a\|\|b"), and a backslash it
+ * ends with doubled when the cell's own pipe follows (`pipeAfter`), which it would else escape.
+ */
+function cellText(text, before = 0, pipeAfter = false) {
+    let out = '', backslashes = before;
+    for (const ch of text) {
+        if (ch === '|' && backslashes % 2 === 0) out += '\\';
+        out += ch;
+        backslashes = ch === '\\' ? backslashes + 1 : 0;
+    }
+    if (text && pipeAfter && backslashes % 2 === 1) out += '\\';
+    return out;
+}
+
+const backslashesBefore = (source, at) => {
+    let count = 0;
+    while (at - count > 0 && source[at - count - 1] === '\\') count++;
+    return count;
+};
 
 // ---- Enter ---------------------------------------------------------------------------------------------------------
 

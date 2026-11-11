@@ -308,18 +308,26 @@ export function linkAt(state, a, b = a) {
     return found;
 }
 
-// A link as it is written: `[label](address "title")`, the address in angle brackets when it has a space or a bracket.
+// A link as it is written: `[label](address "title")`.
 function writtenLink(label, address, title) {
-    const destination = /[\s()<>]/.test(address) ? `<${address.replace(/</g, '%3C').replace(/>/g, '%3E')}>` : address;
     const titled = title ? ` "${title.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"` : '';
-    return `[${label}](${destination}${titled})`;
+    return `[${label}](${writtenDestination(address)}${titled})`;
 }
 
-/** A picture, `![description](address)`, at the caret. */
+// A link's or a picture's address as it is written: in angle brackets when it has a space, a parenthesis or an angle
+// bracket, its angle brackets percent-encoded (an address in angle brackets can have none).
+function writtenDestination(address) {
+    return /[\s()<>]/.test(address) ? `<${address.replace(/</g, '%3C').replace(/>/g, '%3E')}>` : address;
+}
+
+/**
+ * A picture, `![description](address)`, at the caret: the description is text, its brackets and backslashes escaped, and
+ * the address is written as a link's.
+ */
 export function insertImage(state, selection, address, description = '') {
     const [a, b] = order(selection);
-    const destination = /[\s()<>]/.test(address) ? `<${address}>` : address;
-    const image = `![${description}](${destination})`;
+    const text = String(description ?? '').replace(/[\\[\]]/g, '\\$&');
+    const image = `![${text}](${writtenDestination(String(address))})`;
     const source = state.replaced(a, b, image);
     return { source, caret: a + image.length, anchor: a + image.length };
 }
