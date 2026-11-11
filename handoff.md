@@ -80,11 +80,36 @@ branch here AND add all your other findings as tasks in TO-DO.md"), fixed on mai
 `4c41574`): a `<template>` in `<markdown-editor>` was read by its `innerHTML`, a
 quote's `>` coming back as `&gt;` (now `templateText`, node by node); a form's reset emptied
 the element (now the Markdown it was given); `a||b` pasted into a table cell left the second
-pipe bare, a cell more in its row (now `cellText`: every pipe not escaped already, and a
-backslash typed before the cell's own pipe doubled); `insertImage` wrote a `]` of the
-description and an address's `<` and `>` as they were (now escaped, the address written as
-a link's: `writtenDestination`). `test/element.test.js` is new. The review's other findings
-are tasks in `TO-DO.md`. See the document's sections 7.2, 7.4, 12 and 13.
+pipe bare, a cell more in its row (now `cellText`: every pipe not escaped already);
+`insertImage` wrote a `]` of the description and an address's `<` and `>` as they were (now
+escaped, the address written as a link's: `writtenDestination`). `test/element.test.js` is
+new. See the document's sections 7.2, 7.4, 12 and 13.
+
+The review's other findings, as `TO-DO.md` tasks (2026-11-11, the user: "Process the
+TO-DO"), each on its own `claude/` branch merged into main, not pushed:
+- A file dropped on the editor is refused, not opened in place of the page (`refuseDrops`;
+  section 4.7).
+- A table cell's pipes stay what they were whatever is typed or taken out (`cellEdit`: a
+  space before the cell's own pipe, which a backslash would escape; section 7.2). This
+  replaces the doubled backslash of the first fix.
+- Right-click: the browser's menu is the text area's, for Cut, Copy and Paste
+  (`_onContextMenu`; section 4.7). Checked by a test, not seen in a real menu.
+- The toolbar from the keyboard: one Tab stop, the arrows, Home, End, Escape, Alt+F10;
+  Escape then Tab leaves the text; hidden syntax `aria-hidden` (sections 4.7 and 11). What a
+  screen reader reads at the caret is a question in `TO-DO.md`.
+- A Mac's Cmd with the arrows, Backspace and Delete (the view's `mac`; section 4.8). Not
+  tried on a Mac.
+- Clipboard failures raise `clipboardunavailable`, which the editor passes on, and a refused
+  cut takes nothing out (section 4.7).
+- The element's `input` and `change` are the user's changes only, as a native field's
+  (decided by Claude, noted in `TO-DO.md` for the user to overrule; section 12).
+- Emphasis keeps commonmark.js's openers' bottom: linear, 480 KB in 70 ms where it took
+  4.4 s (section 5.2).
+- `isDark` tells any CSS color (section 11); a picture's alt is its description's plain
+  text (section 6.1); tests for the clipboard's events and the element's attributes;
+  `serve.ps1` serves only inside its folder (section 13).
+- Two tasks wait on the user's answer (`[QUESTION]` in `TO-DO.md`): screen readers at the
+  caret, and adapting `AGENTS.md`, `.gitignore` and `TO-DO-INSTRUCTIONS.md`.
 
 ## Design decisions
 
@@ -105,8 +130,10 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Verification
 
-- `test/index.html`: 74 passed, 0 failed (Chrome, in the Claude desktop app's browser,
+- `test/index.html`: 87 passed, 0 failed (Chrome, in the Claude desktop app's browser,
   2026-11-11). `?steps=150` ran the random test clean as well.
+- The browser pane was out of sight for the work of 2026-11-11: the browser's own context
+  menu was not seen, and the timings there (the emphasis's) are of a background page.
 - Tried by hand in the browser: typing, the syntax at the caret, Enter in a list and a
   quote, a task's box clicked, a word double-clicked and made bold from the toolbar, the
   code fences shown together, copy, cut and paste, the dark theme, the element in a form,
@@ -124,9 +151,9 @@ The decisions are in `documents/implementation.md`; the ones a new session needs
 
 ## Next steps
 
-1. The review's tasks in `TO-DO.md`, when the user says so.
-2. Firefox and Safari, mobile keyboards and input methods, tried by hand.
+1. The two `[QUESTION]` tasks in `TO-DO.md`, once the user has answered: screen readers at
+   the caret; `AGENTS.md`, `.gitignore` and `TO-DO-INSTRUCTIONS.md` made this project's.
+2. Firefox and Safari, mobile keyboards and input methods, a right-click's menu and a Mac's
+   keys, tried by hand.
 3. Table commands, code highlighting, find and replace; the raw view's own stylesheet
    (MaxPad's).
-4. Adapt `AGENTS.md`, now a copy of MarkdownTools' (WPF and .NET rules), to this project:
-   the user's decision.
