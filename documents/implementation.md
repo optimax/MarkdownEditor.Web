@@ -1114,8 +1114,12 @@ headings: the outline marks, section 4.11; off by default, the page's to offer).
   separated by spaces or commas: `"undo redo | strong em"`), `readonly`, `image-base`, `src`,
   `name`, `paragraph-numbers`, `paragraph-types`, `outline` (collapsible headings).
 - **A form field:** it is form-associated (`ElementInternals`): a form submits its Markdown
-  under its `name`, and it raises `input` and `change` (bubbling) after each change, and
-  `linkclick`.
+  under its `name` (its form value set after every change), and it raises `input` and
+  `change` (bubbling) after each change the user makes, and `linkclick`. As a native field's,
+  they are not raised for a value a script sets, a form's reset or a `src` file
+  (`_settingValue` round `editor.value`; the TO-DO's question, 2026-11-11: the native fields'
+  way, so that a page that saves on `change` does not save what it has just loaded); the
+  editor's own `change` is raised for every change.
 - `value` and `editor` are its properties.
 
 ------
@@ -1136,7 +1140,7 @@ the suites; `?steps=150` makes the random test longer.
 | `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits, the gutter's numbers (a table's row one, its room taken and given back) and names (outside the numbers, on their line, the host's first, a long one cut); the outline (a heading folding what it heads, the caret stepping over it, a heading replaced by its like staying collapsed, a caret put in a fold opening it); `copy()`, `cut()` and `paste()` with a clipboard that writes and one that refuses (told, nothing cut or pasted, no unhandled rejection); a right-click (the text area under the pointer, the caret put outside the selection and the selection kept inside it, the menu's Copy, the text area back at the caret) |
 | `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); a Markdown heading edited and undone staying collapsed; the page's own toolbar buttons; no syntax in a read-only editor, and no undo or redo in it; Ctrl+K in a link; Tab on a numbered item; Shift+Delete with a clipboard that refuses (the page told, nothing taken out); a Mac's Cmd with the arrows, Backspace and Delete; the toolbar from the keyboard (one Tab stop, the arrows, Home, End, Alt+F10, Escape) and Escape then Tab out of the text; a file dropped on the text or the toolbar refused, a page's own listener after the editor's |
 | `raw.test.js` | the raw view's paragraphs and its map to the source (every offset there and back); looking that changes nothing; text changed in it as one undo step; no formats in it; the paragraph numbers and types of the two views agreeing, a line's type following its text |
-| `element.test.js` | `<markdown-editor>`: the Markdown in a `<template>` read as written (a quote's `>`, an `&`, its HTML); a form's reset bringing back the Markdown each element was given, and the form sending it |
+| `element.test.js` | `<markdown-editor>`: the Markdown in a `<template>` read as written (a quote's `>`, an `&`, its HTML); `input` and `change` for the user's changes only (not a script's value, a reset, a `src` file), the form value after each; a form's reset bringing back the Markdown each element was given, and the form sending it |
 
 After every command `editor.test.js` checks what MaxPad.Editing.Tests check: the view's
 paragraphs are those of a fresh projection of the source (text, style and runs), and only the

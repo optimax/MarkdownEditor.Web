@@ -17,6 +17,27 @@ test('a <template> is read as the Markdown written in it: a quote\'s ">", an "&"
     equal(stage.querySelector('markdown-editor').value, '> A quote\n\nR&D, a < b, <kbd>Ctrl</kbd><br> <!-- a note -->');
 });
 
+test('input and change follow the user\'s changes only, as a <textarea>\'s: not a script\'s, a reset, a src file', async () => {
+    const stage = await staged('<form><markdown-editor name="body" style="height: 200px"></markdown-editor></form>');
+    const form = stage.querySelector('form'), element = form.querySelector('markdown-editor');
+    const events = [];
+    for (const type of ['input', 'change']) stage.addEventListener(type, () => events.push(type));
+    let changes = 0;
+    element.editor.addEventListener('change', () => changes++);
+    element.value = '# Set';
+    form.reset();
+    equal([events, changes], [[], 2], 'a script\'s value and a form\'s reset: the editor\'s change only');
+    element.editor.select(0);
+    element.editor.view.input.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: 'x',
+        cancelable: true }));
+    equal([events, element.value, new FormData(form).get('body')], [['input', 'change'], 'x', 'x'], 'typed');
+    events.length = 0;
+    element.setAttribute('src', '../demo/sample.md');
+    for (let i = 0; i < 100 && !element.value.startsWith('# Markdown'); i++) await new Promise((r) => setTimeout(r, 20));
+    equal([events, new FormData(form).get('body') === element.value], [[], true], 'a src file loaded');
+    stage.replaceChildren();
+});
+
 test('a form\'s reset brings back the Markdown the element was given, and the form sends it', async () => {
     const stage = await staged('<form><markdown-editor name="body" style="height: 200px">' +
         '<script type="text/markdown">\n# Initial\n</script></markdown-editor>' +

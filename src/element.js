@@ -13,7 +13,8 @@
 // `name` (the field's name in a form: the element is a form field whose value is the Markdown), `image-base`,
 // `paragraph-numbers` (each paragraph's number in a gutter), `paragraph-types` (each paragraph's type there),
 // `outline` (headings that can be collapsed: marks beside them that fold what they head).
-// Properties: `value`, `editor` (the MarkdownEditor). Events: 'change' (and 'input', for forms), 'linkclick'.
+// Properties: `value`, `editor` (the MarkdownEditor). Events: 'input' and 'change' after each of the user's changes (as a
+// <textarea>'s: not for a value a script sets, a form's reset or a `src` file), 'linkclick'.
 
 import { MarkdownEditor } from './MarkdownEditor.js';
 
@@ -86,6 +87,9 @@ export class MarkdownEditorElement extends HTMLElement {
         });
         this.editor.addEventListener('change', () => {
             this._internals?.setFormValue(this.editor.value);
+            // (as a <textarea>'s: the user's changes only, not a value a script sets, a form's reset or a `src` file;
+            // the editor's own 'change' is raised for those too)
+            if (this._settingValue) return;
             this.dispatchEvent(new Event('input', { bubbles: true }));
             this.dispatchEvent(new Event('change', { bubbles: true }));
         });
@@ -127,7 +131,12 @@ export class MarkdownEditorElement extends HTMLElement {
             this.setAttribute('value', markdown);
             return;
         }
-        this.editor.value = markdown;
+        this._settingValue = true;
+        try {
+            this.editor.value = markdown;
+        } finally {
+            this._settingValue = false;
+        }
         this._internals?.setFormValue(this.editor.value);
     }
 

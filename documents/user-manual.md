@@ -1993,7 +1993,9 @@ element.setAttribute('src', 'notes/tomorrow.md');
 - `editor`: the `MarkdownEditor` inside it, for everything in Part II.
 - `form` and `name`: its form and its name.
 - `focus()`: gives it the focus.
-- Events, which bubble: `input` and `change` after every change, and `linkclick` (as in
+- Events, which bubble: `input` and `change` after every change the user makes (as a
+  `<textarea>`'s, not when a script sets `value`, a form is reset or a `src` file arrives:
+  `element.editor`'s own `change` is raised for those too), and `linkclick` (as in
   chapter 33).
 
 ```js
