@@ -178,6 +178,8 @@ export class MarkdownEditor extends EventTarget {
         this.view.addEventListener('undo', () => this.raw.isOn && this.undo());
         this.view.addEventListener('redo', () => this.raw.isOn && this.redo());
         this.view.addEventListener('hyperlinkclick', (event) => this._onLinkClick(event));
+        // (Shift+Delete and Ctrl+Shift+V use the asynchronous clipboard, which a page may not be allowed: it is told)
+        this.view.addEventListener('clipboardunavailable', () => this.dispatchEvent(new Event('clipboardunavailable')));
         if (this.options.rawMode) this.rawMode = true;
         this._refreshToolbar();
     }

@@ -676,26 +676,38 @@ export class VirtualTextView extends EventTarget {
         this._selectionChanged();
     }
 
-    copy() {
+    /** Copies the selection onto the clipboard: true once it is there ('clipboardunavailable' if it cannot be). */
+    async copy() {
         const text = this._copyText();
-        if (text !== null) this._writeClipboard(text);
+        return text !== null && this._writeClipboard(text);
     }
 
-    cut() {
-        if (!this.selection || this._readOnly) return;
+    /**
+     * Cuts the selection: it is taken out once it is on the clipboard -- not when the clipboard cannot be written
+     * ('clipboardunavailable'), nor when the selection changed meanwhile. True when it was cut.
+     */
+    async cut() {
+        const selection = this.selection;
+        if (!selection || this._readOnly) return false;
         const text = this._copyText();
-        if (text === null) return;
-        this._writeClipboard(text);
+        if (text === null || !(await this._writeClipboard(text))) return false;
+        const now = this.selection;
+        if (!now || !samePosition(now.start, selection.start) || !samePosition(now.end, selection.end)) return false;
         this._command('cut', text, { written: true });
+        return true;
     }
 
+    /** Pastes the clipboard's text at the caret ('clipboardunavailable', and nothing pasted, if it cannot be read). */
     async paste() {
         if (!this.caret || this._readOnly) return;
-        let text = null;
+        let text;
         try {
-            text = this.clipboard ? await this.clipboard.readText() : await navigator.clipboard.readText();
+            const clipboard = this.clipboard ?? navigator.clipboard;
+            if (!clipboard?.readText) throw new Error('No clipboard to read.');
+            text = await clipboard.readText();
         } catch {
-            text = null;
+            this.dispatchEvent(new Event('clipboardunavailable'));
+            return;
         }
         this._command('paste', text);
     }
@@ -2203,12 +2215,17 @@ export class VirtualTextView extends EventTarget {
         return this.selectedText.replaceAll(SOFT_BREAK, '\n');
     }
 
-    _writeClipboard(text) {
+    // The text onto the clipboard (the view's `clipboard`, or the browser's asynchronous one): true once it is there.
+    // A clipboard there is none of, or that refuses (a page not allowed to write it), raises 'clipboardunavailable'.
+    async _writeClipboard(text) {
         try {
-            if (this.clipboard) this.clipboard.writeText(text);
-            else navigator.clipboard?.writeText(text);
+            const clipboard = this.clipboard ?? navigator.clipboard;
+            if (!clipboard?.writeText) throw new Error('No clipboard to write.');
+            await clipboard.writeText(text);
+            return true;
         } catch {
             this.dispatchEvent(new Event('clipboardunavailable'));
+            return false;
         }
     }
 
@@ -2218,7 +2235,7 @@ export class VirtualTextView extends EventTarget {
         const text = this._copyText();
         if (text === null) return;
         e.clipboardData?.setData('text/plain', text);
-        if (this.clipboard) this.clipboard.writeText(text);
+        if (this.clipboard) this._writeClipboard(text);
         if (cut) this._command('cut', text, { written: true });
     }
 

@@ -1507,6 +1507,7 @@ The editor is an `EventTarget`: `editor.addEventListener(name, listener)`.
 | `zoomchange` | after the zoom changes | |
 | `toolbarclick` | after a click on a button of the page's own in the toolbar | `name`, `item` |
 | `linkclick` | on a Ctrl+click on a link; cancelable | `href`, `title` |
+| `clipboardunavailable` | when Shift+Delete or Ctrl+Shift+V could not use the clipboard (the browser did not allow the page to write or read it): nothing was cut or pasted | |
 
 A status bar, as the demo's:
 

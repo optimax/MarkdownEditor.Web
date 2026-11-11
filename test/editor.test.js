@@ -428,6 +428,17 @@ test('a Mac\'s Cmd with the arrows, Backspace and Delete: the ends of the line a
     equal(editor.value, 'a', 'not on a Mac: a Backspace');
 });
 
+test('Shift+Delete with a clipboard that refuses: the page is told, and nothing is taken out', async () => {
+    const editor = makeEditor('one two');
+    let told = 0;
+    editor.addEventListener('clipboardunavailable', () => told++);
+    editor.view.clipboard = { writeText: () => Promise.reject(new Error('Not allowed.')) };
+    editor.select(0, 3);
+    await press(editor, 'Delete', { shiftKey: true });
+    await tick();
+    equal([told, editor.value], [1, 'one two']);
+});
+
 test('the toolbar is one Tab stop, its arrows going from control to control; Alt+F10 and Escape', () => {
     const stage = document.getElementById('stage');
     stage.replaceChildren();

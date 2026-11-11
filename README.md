@@ -126,8 +126,9 @@ What a page reads and calls:
 
 Events (`addEventListener`): `change` after each change of the Markdown, `selectionchange`,
 `modechange` (the raw view on or off), `toolbarclick` (one of your buttons; `detail.name`),
-`zoomchange`, and `linkclick` (`detail.href`; call `preventDefault()` to handle it
-yourself).
+`zoomchange`, `linkclick` (`detail.href`; call `preventDefault()` to handle it
+yourself), and `clipboardunavailable` (Shift+Delete or Ctrl+Shift+V could not use the
+clipboard: nothing was cut or pasted).
 
 **Your own toolbar buttons** go in the `toolbar` list (or `toolbarItems`) beside the
 editor's names, as objects: `name`, `title`, `icon` (an SVG: a whole `<svg>`, or what goes

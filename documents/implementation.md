@@ -298,8 +298,12 @@ The browser lays the text out; the view reads the geometry back with DOM ranges.
 - **The clipboard:** the browser's `copy`, `cut` and `paste` events on the text area. While
   something is selected, the text area holds a selected character, so that the browser
   offers Copy and Cut. Copy asks the host first (`editcommand` with `copy`: a host puts its
-  text in `detail.result`). `copy()`, `cut()` and `paste()` called by a page use the
-  asynchronous clipboard (or a `clipboard` object given to the view).
+  text in `detail.result`). `copy()`, `cut()` and `paste()` called by a page (and Shift+Delete
+  and Ctrl+Shift+V, which are the view's) use the asynchronous clipboard (or a `clipboard`
+  object given to the view), and wait for it: a clipboard there is none of, or that refuses,
+  raises `clipboardunavailable`, and then nothing is pasted, and a cut takes nothing out (nor
+  when the selection changed while the clipboard was written). `copy()` and `cut()` give true
+  when they were done.
 - **The right-click menu** is the text area's (`_onContextMenu`): a right `mousedown` keeps
   the focus in the text area, and on `contextmenu` the text area is put under the pointer
   (16 px square, taking pointer events) holding the selection as `_syncInput` keeps it, so
@@ -1085,7 +1089,8 @@ headings: the outline marks, section 4.11; off by default, the page's to offer).
   `paragraphNumber` (the caret's
   paragraph's, as the gutter numbers it, in either view: what a status bar says),
   `execute(name)`; events `change`, `selectionchange`,
-  `linkclick`, `modechange` (the raw view on or off).
+  `linkclick`, `modechange` (the raw view on or off), `clipboardunavailable` (the view's,
+  passed on: Shift+Delete or Ctrl+Shift+V could not use the clipboard, section 4.7).
 
 ------
 
@@ -1128,8 +1133,8 @@ the suites; `?steps=150` makes the random test longer.
 | `incremental.test.js` | a source read again in part, after thousands of random changes (characters that make and unmake every kind of block, typed and taken away) in documents of every kind, is what a whole reading makes of it: every line, mark, block, definition and paragraph, field by field; a change reads only the blocks around it; a definition makes it read whole |
 | `projection.test.js` | blank lines, hidden and shown syntax (`⟦hidden⟧`, `⟨concealed⟩`), styles, list markers, and that every paragraph is its stretch of the source and every position maps to the source and back |
 | `commands.test.js` | each editing rule (Tab on bullets and numbered items among them; pipes and backslashes typed, pasted or taken out of a table cell, the row keeping its cells), the formats, the paragraph types, the links (made, their address changed, taken away) and the pictures (their description and address escaped), written with `¦` for the caret and `«...»` for a selection, as MaxPad.Editing.Tests write theirs |
-| `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits, the gutter's numbers (a table's row one, its room taken and given back) and names (outside the numbers, on their line, the host's first, a long one cut); the outline (a heading folding what it heads, the caret stepping over it, a heading replaced by its like staying collapsed, a caret put in a fold opening it); a right-click (the text area under the pointer, the caret put outside the selection and the selection kept inside it, the menu's Copy, the text area back at the caret) |
-| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); a Markdown heading edited and undone staying collapsed; the page's own toolbar buttons; no syntax in a read-only editor, and no undo or redo in it; Ctrl+K in a link; Tab on a numbered item; a Mac's Cmd with the arrows, Backspace and Delete; the toolbar from the keyboard (one Tab stop, the arrows, Home, End, Alt+F10, Escape) and Escape then Tab out of the text; a file dropped on the text or the toolbar refused, a page's own listener after the editor's |
+| `view.test.js` | the view on its own: its editing, `TextEdit` and its replay, styles, a host doing the edits, the gutter's numbers (a table's row one, its room taken and given back) and names (outside the numbers, on their line, the host's first, a long one cut); the outline (a heading folding what it heads, the caret stepping over it, a heading replaced by its like staying collapsed, a caret put in a fold opening it); `copy()`, `cut()` and `paste()` with a clipboard that writes and one that refuses (told, nothing cut or pasted, no unhandled rejection); a right-click (the text area under the pointer, the caret put outside the selection and the selection kept inside it, the menu's Copy, the text area back at the caret) |
+| `editor.test.js` | the editor in a real view, keys and typing sent to it as the browser sends them; the content styled by classes (no CSS of its own, a page's rule winning, the zoom, the themes); a Markdown heading edited and undone staying collapsed; the page's own toolbar buttons; no syntax in a read-only editor, and no undo or redo in it; Ctrl+K in a link; Tab on a numbered item; Shift+Delete with a clipboard that refuses (the page told, nothing taken out); a Mac's Cmd with the arrows, Backspace and Delete; the toolbar from the keyboard (one Tab stop, the arrows, Home, End, Alt+F10, Escape) and Escape then Tab out of the text; a file dropped on the text or the toolbar refused, a page's own listener after the editor's |
 | `raw.test.js` | the raw view's paragraphs and its map to the source (every offset there and back); looking that changes nothing; text changed in it as one undo step; no formats in it; the paragraph numbers and types of the two views agreeing, a line's type following its text |
 | `element.test.js` | `<markdown-editor>`: the Markdown in a `<template>` read as written (a quote's `>`, an `&`, its HTML); a form's reset bringing back the Markdown each element was given, and the form sending it |
 

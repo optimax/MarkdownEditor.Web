@@ -153,6 +153,31 @@ test('positions, text and selection', () => {
     equal(view.caret, pos(1, 3), 'clamped to the document');
 });
 
+test('copy(), cut() and paste(): a clipboard that refuses is told, and a refused cut takes nothing out', async () => {
+    const { view } = makeView(['Hello world']);
+    let told = 0, unhandled = 0, written = null;
+    const count = () => unhandled++;
+    window.addEventListener('unhandledrejection', count);
+    view.addEventListener('clipboardunavailable', () => told++);
+    view.clipboard = { writeText: async (text) => (written = text), readText: async () => 'pasted' };
+    view.select(pos(0, 6), pos(0, 11));
+    equal([await view.copy(), written], [true, 'world'], 'copied');
+    equal([await view.cut(), view.getText()], [true, 'Hello '], 'cut');
+    await view.paste();
+    equal(view.getText(), 'Hello pasted', 'pasted');
+    const refuse = () => Promise.reject(new Error('Not allowed.'));
+    view.clipboard = { writeText: refuse, readText: refuse };
+    view.select(pos(0, 0), pos(0, 5));
+    equal(await view.copy(), false, 'a refused copy');
+    equal([await view.cut(), view.getText()], [false, 'Hello pasted'], 'a refused cut takes nothing out');
+    view.setCaret(pos(0, 12));
+    await view.paste();
+    equal(view.getText(), 'Hello pasted', 'a refused paste pastes nothing');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    window.removeEventListener('unhandledrejection', count);
+    equal([told, unhandled], [3, 0], 'each told, none left unhandled');
+});
+
 test('a right-click puts the text area under the pointer, for the browser\'s Cut, Copy and Paste', async () => {
     const { view } = makeView(['Hello world', 'second']);
     document.getElementById('stage').scrollIntoView();
