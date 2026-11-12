@@ -235,6 +235,9 @@ reaches the controller as an edit command; it works out the new Markdown (each r
 pure function of the source and the selection, in `commands.js`), reads it again, and gives
 the view just the paragraphs that changed. The view's own editing never runs for Markdown.
 
+**Line endings.** A line ending is normalized to the document's own on load: a file whose line endings are a
+  mixture is saved with one kind.
+
 **The view is a component of its own**, as `VirtualTextView` is: a list of paragraphs of
 runs, styles from a style provider, its own caret, selection, keyboard, mouse, IME and
 clipboard handling, and its own editing for a host that wants it (TinyPad). Before it changes
@@ -247,10 +250,7 @@ clipboard.
 
 ## Not done yet
 
-- MaxPad's features beyond the editor itself: the outline, find and replace, the stylesheet
-  files, spelling, export.
-- Code highlighting by language, drag and drop of text, and pasting pictures.
+- find and replace, spelling.
+- Code highlighting by language, pasting pictures.
 - Table commands beyond typing in cells, Tab and Enter (rows and columns added or deleted,
   alignment).
-- A line ending is normalized to the document's own on load: a file whose line endings are a
-  mixture is saved with one kind.
