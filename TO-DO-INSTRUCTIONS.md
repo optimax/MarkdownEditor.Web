@@ -22,7 +22,7 @@ A task marked [PAUSED] was started and then paused by the agent (for example, wh
 
 When reading TO-DO, read it in its entirety and analyze which tasks are related, so that you don't make design decisions that you are going to regret further down the line. Understand that some tasks may be related to other tasks and choices you make for one may conflict with the best choices for a future task.
 
-A task too large to land in one piece is split into tasks of its own, one per part, each placed in `TO-DO.md` in its order and each marked [DONE] when its part lands. Define the parts in a permanent document first (`AGENTS.md`, section 11, "Referring to Work"). The parent task keeps the user's requirement and points to that document and to its parts' tasks; it is marked [IDLE] while any of its parts is open, and [DONE] when the last one is done.
+A task too large to land in one piece is split into tasks of its own, one per part, each placed in `TO-DO.md` in its order and each marked [DONE] when its part lands. Define the parts in a permanent document first (`AGENTS.md`, section 14, "Referring to Work"). The parent task keeps the user's requirement and points to that document and to its parts' tasks; it is marked [IDLE] while any of its parts is open, and [DONE] when the last one is done.
 
 Do not hesitate to ask the user any questions when something is unclear, or when you are faced with a design decision. When you need to ask user a clarifying question, do not pop a modal blocking dialog in the interactive chat. Ask it by placing it in `TO-DO.md`, underneath the relevant task description, formatted in **bold**, and continue with other TO-DOs in the meantime, while waiting for user's answers.
 

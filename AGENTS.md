@@ -278,6 +278,26 @@ current state, not a diary. Durable lessons every agent should know belong in th
 
 Tell the user of any change you make to this `AGENTS.md`.
 
+## Referring to Work
+
+Refer to a numbered or named grouping of work, such as slices, phases, steps, batches or
+chains of branches, only where a permanent document defines it, and name that document and
+its section. A permanent document is one kept in the repository for its own sake, such as
+`documents/implementation.md` or a design document. A task's text in `TO-DO.md` or `DONE.md`
+is not one, since it moves or goes away. If a grouping is useful, write it into a permanent
+document first.
+
+Otherwise, refer to work by what can be found later:
+
+- a commit by its hash;
+- a branch by its name, only while the branch exists;
+- a task by its title;
+- a document by its path and section;
+- queued work by what it waits for.
+
+This applies to everything left for others to read: `TO-DO.md` and `DONE.md`, `handoff.md`,
+`documents/implementation.md`, commit messages, and messages to the user and to other agents.
+
 ------
 
 # 15. Suspending an Agent Session
